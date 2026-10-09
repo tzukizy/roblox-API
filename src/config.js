@@ -8,6 +8,7 @@ const __dirname = path.dirname(__filename);
 
 export const ROOT_DIR = path.resolve(__dirname, "..");
 export const DATA_DIR = path.resolve(ROOT_DIR, "data");
+export const CACHE_DIR = path.resolve(ROOT_DIR, ".cache");
 
 // Automatically load .env if present
 try {
@@ -34,6 +35,7 @@ try {
 
 export const PATHS = {
   data: DATA_DIR,
+  cache: CACHE_DIR,
   home: path.resolve(DATA_DIR, "home"),
   homeLatest: path.resolve(DATA_DIR, "home", "latest"),
   script: path.resolve(DATA_DIR, "script"),

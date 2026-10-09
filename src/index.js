@@ -13,6 +13,7 @@ import { scrapeRolimonsGameList } from "./scrapers/rolimons.js";
 import {
   fetchRobloxPlaceIcons,
   fetchRobloxGamesBatch,
+  savePlaceToUniverseCache,
 } from "./scrapers/roblox.js";
 import {
   fetchScripts,
@@ -471,6 +472,7 @@ export async function runScraper() {
   const robloxDetailsMap = await fetchRobloxGamesBatch(
     Array.from(placeIdsNeedingRoblox),
   );
+  savePlaceToUniverseCache();
 
   const unifiedGames = [];
   const BATCH_SIZE = 40;
@@ -931,6 +933,7 @@ export async function runScraper() {
   };
 
   await writeJsonFile(path.join(PATHS.data, "manifest.json"), manifest);
+  savePlaceToUniverseCache();
 
   console.log("\n==================================================");
   console.log("Data Pipeline Complete!");

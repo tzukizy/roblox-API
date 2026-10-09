@@ -18,6 +18,9 @@ import {
   fetchRobloxPlaceIcons,
   fetchRobloxGameDetails,
   fetchRobloxGamesBatch,
+  resolvePlaceToUniverse,
+  savePlaceToUniverseCache,
+  loadPlaceToUniverseCache,
 } from "../src/scrapers/roblox.js";
 import {
   fetchScripts,
@@ -693,3 +696,18 @@ test("scrapeScriptBloxScriptSitemaps discovers script slugs across all sitemaps"
   );
   assert.ok(typeof slugs[0] === "string");
 });
+
+test("place-to-universe cache persistence saves and restores mappings", async () => {
+  // Resolve or insert test mapping
+  const uid = await resolvePlaceToUniverse(189707); // Natural Disaster Survival
+  assert.ok(typeof uid === "number" && uid > 0);
+
+  savePlaceToUniverseCache();
+  const loadedCount = loadPlaceToUniverseCache();
+  assert.ok(loadedCount > 0, "Cache should load at least 1 entry from disk");
+
+  // Fast path should return cached value instantly without network call
+  const cachedUid = await resolvePlaceToUniverse(189707);
+  assert.equal(cachedUid, uid);
+});
+

@@ -1,9 +1,61 @@
-import { API_URLS, USER_AGENTS, RATE_LIMITS } from "../config.js";
+import fs from "node:fs";
+import path from "node:path";
+import { API_URLS, USER_AGENTS, RATE_LIMITS, CACHE_DIR } from "../config.js";
 import { fetchWithRetry } from "../utils/http.js";
 import { createThrottler } from "../utils/throttle.js";
 
+const CACHE_FILE = path.join(CACHE_DIR, "place-to-universe.json");
+
 // In-memory cache to prevent duplicate HTTP calls for the same placeId
 const placeToUniverseCache = new Map();
+
+/**
+ * Loads place-to-universe mappings from disk cache if present.
+ * @returns {number} Number of entries loaded.
+ */
+export function loadPlaceToUniverseCache() {
+  try {
+    if (fs.existsSync(CACHE_FILE)) {
+      const data = JSON.parse(fs.readFileSync(CACHE_FILE, "utf-8"));
+      let loaded = 0;
+      for (const [pid, uid] of Object.entries(data)) {
+        const numPid = Number(pid);
+        const numUid = Number(uid);
+        if (numPid && numUid) {
+          placeToUniverseCache.set(numPid, numUid);
+          loaded++;
+        }
+      }
+      console.log(`-> Loaded ${loaded} place-to-universe mappings from cache.`);
+      return loaded;
+    }
+  } catch (err) {
+    console.warn(`[Roblox Cache] Failed to load cache: ${err.message}`);
+  }
+  return 0;
+}
+
+/**
+ * Persists current in-memory place-to-universe mappings to disk cache.
+ */
+export function savePlaceToUniverseCache() {
+  try {
+    if (!fs.existsSync(CACHE_DIR)) {
+      fs.mkdirSync(CACHE_DIR, { recursive: true });
+    }
+    const obj = {};
+    for (const [pid, uid] of placeToUniverseCache.entries()) {
+      obj[pid] = uid;
+    }
+    fs.writeFileSync(CACHE_FILE, JSON.stringify(obj, null, 2), "utf-8");
+    console.log(`-> Saved ${placeToUniverseCache.size} place-to-universe mappings to cache.`);
+  } catch (err) {
+    console.warn(`[Roblox Cache] Failed to save cache: ${err.message}`);
+  }
+}
+
+// Automatically load existing cache from disk if available
+loadPlaceToUniverseCache();
 
 // Paced to ~55 requests/min to strictly respect Roblox's 60 req/min limit on /universes/v1/places/{placeId}/universe
 const universeThrottle = createThrottler(1050);
