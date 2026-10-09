@@ -67,5 +67,7 @@ jobs:
           else
             TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
             git commit -m "chore(data): sync scraper data [$TIMESTAMP] [skip ci]"
+            git fetch origin main
+            git rebase -X ours origin/main
             git push origin main
           fi
