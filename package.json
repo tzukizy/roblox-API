@@ -1,0 +1,26 @@
+{
+  "name": "roblox-api-scraper",
+  "version": "1.0.0",
+  "description": "Automated scraper for Rolimons, ScriptBlox, and Roblox APIs producing structured JSON data for WebAuth",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "scrape": "node src/index.js",
+    "scrape-test": "node src/test-scrape.js",
+    "scrape:test": "node src/test-scrape.js",
+    "test": "node --test tests/**/*.test.js"
+  },
+  "keywords": [
+    "roblox",
+    "scriptblox",
+    "rolimons",
+    "scraper",
+    "github-actions"
+  ],
+  "author": "KocakZ",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
