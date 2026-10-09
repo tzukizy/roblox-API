@@ -644,9 +644,13 @@ export async function runScraper() {
       scripts: pageScripts,
     });
   }
+  // Save /data/keyless/scripts.json with page 1 summary slice (20 scripts)
   await writeJsonFile(path.join(PATHS.keyless, "scripts.json"), {
-    count: keylessScripts.length,
-    scripts: keylessScripts,
+    page: 1,
+    totalPages: targetKeylessPages,
+    totalCount: keylessScripts.length,
+    count: Math.min(20, keylessScripts.length),
+    scripts: keylessScripts.slice(0, 20),
   });
 
   // Universal scripts
@@ -680,10 +684,12 @@ export async function runScraper() {
     }
   }
 
-  // Legacy /data/universal/scripts.json
+  // Save /data/universal/scripts.json with page 1 summary slice (20 scripts)
   await writeJsonFile(path.join(PATHS.universal, "scripts.json"), {
-    count: universalScripts.length,
-    scripts: universalScripts,
+    page: 1,
+    totalCount: universalScripts.length,
+    count: Math.min(20, universalScripts.length),
+    scripts: universalScripts.slice(0, 20),
   });
 
   // Construct Universal as a Game entity conforming to Unified Game Schema
