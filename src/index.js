@@ -449,7 +449,9 @@ export async function runScraper() {
   // Pre-fetch ScriptBlox summary and Roblox details for games with scripts + top active games
   const placeIdsNeedingRoblox = new Set();
   const maxLiveDetails =
-    Number(process.env.MAX_ROBLOX_DETAILS) || SCRAPE_LIMITS.trendingGames;
+    Number(process.env.MAX_ROBLOX_DETAILS) ||
+    SCRAPE_LIMITS.topGamesWithRobloxDetails ||
+    240;
 
   // 1. Top active games from Rolimons
   for (let i = 0; i < Math.min(placeIdList.length, maxLiveDetails); i++) {

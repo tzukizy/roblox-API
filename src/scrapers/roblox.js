@@ -294,8 +294,8 @@ export async function fetchRobloxGamesBatch(placeIds) {
   const universeIds = Array.from(universeToPlace.keys());
   if (universeIds.length === 0) return result;
 
-  // 2. Fetch game details and icons in chunks of 100 universeIds
-  const BATCH_SIZE = 100;
+  // 2. Fetch game details and icons in chunks of up to 50 universeIds (Roblox hard limit is 50)
+  const BATCH_SIZE = 50;
   const headers = {
     "User-Agent": USER_AGENTS.roblox,
   };
@@ -350,6 +350,12 @@ export async function fetchRobloxGamesBatch(placeIds) {
             robloxUrl: `https://www.roblox.com/games/${pid}`,
           });
         }
+      } else {
+        const errDetail =
+          gamesRes.status === "fulfilled"
+            ? `${gamesRes.value.status} ${gamesRes.value.error || ""}`
+            : gamesRes.reason?.message;
+        console.warn(`[Roblox] Game details batch failed: ${errDetail}`);
       }
     } catch (err) {
       console.warn(
@@ -358,7 +364,7 @@ export async function fetchRobloxGamesBatch(placeIds) {
     }
 
     if (i + BATCH_SIZE < universeIds.length) {
-      await new Promise((r) => setTimeout(r, 200));
+      await new Promise((r) => setTimeout(r, 1000));
     }
   }
 

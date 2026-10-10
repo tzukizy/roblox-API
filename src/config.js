@@ -85,7 +85,8 @@ export const USER_AGENTS = {
 };
 
 export const SCRAPE_LIMITS = {
-  trendingGames: 12,
+  trendingGames: 48,
+  topGamesWithRobloxDetails: 240,
   catalogGames: Number(process.env.MAX_CATALOG_GAMES) || Infinity, // Uncapped: all 7,000+ games from Rolimons
   gamePageSize: 24, // Exactly 24 games per page (matching WebAuth)
   // Sitemaps discover ~73,700 scripts (3,686 pages). Uncapped by default unless MAX_PAGES is explicitly set.
