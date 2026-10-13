@@ -48,11 +48,17 @@ jobs:
           npm ci || npm install
 
       - name: Run verification tests
+        env:
+          ROBLOX_API_KEY: ${{ secrets.ROBLOX_API_KEY }}
+          CDN_URL: ${{ secrets.CDN_URL }}
+          CDN_API_KEY: ${{ secrets.CDN_API_KEY }}
         run: npm test
 
       - name: Execute Scraper
         env:
           ROBLOX_API_KEY: ${{ secrets.ROBLOX_API_KEY }}
+          CDN_URL: ${{ secrets.CDN_URL }}
+          CDN_API_KEY: ${{ secrets.CDN_API_KEY }}
         run: npm run scrape
 
       - name: Commit and push changes
