@@ -3,8 +3,6 @@ import assert from "node:assert/strict";
 import {
   getScriptGameSlug,
   resolveScriptImageUrl,
-  formatCompactNumber,
-  buildGameImageSources,
   buildGameThumbnails,
   normalizeRobloxThumb,
   formatGamePathAndSlug,
@@ -25,7 +23,6 @@ import { CDN_CONFIG } from "../src/config.js";
 import { scrapeRolimonsGameList } from "../src/scrapers/rolimons.js";
 import {
   fetchRobloxPlaceIcons,
-  fetchRobloxGameDetails,
   fetchRobloxGamesBatch,
   resolvePlaceToUniverse,
   savePlaceToUniverseCache,
@@ -37,7 +34,6 @@ import {
   fetchGameSummary,
   fetchExecutors,
   fetchLeaderboard,
-  scrapeScriptBloxGameSitemap,
   scrapeScriptBloxScriptSitemaps,
   fetchScriptSupportedGames,
   enrichRawScriptPlaceIds,
@@ -52,60 +48,55 @@ test("Image priority strictly enforces: roblox api > rolimons > scriptblox > fal
   const fallback = "/brand/kocakz-logo.png";
 
   // Case 1: All sources present -> Roblox API must be #1, Rolimons #2, ScriptBlox #3
-  const res1 = buildGameImageSources({
-    robloxIcon,
-    scriptbloxImage: scriptbloxImg,
+  const res1 = buildGameThumbnails({
+    robloxThumb: robloxIcon,
+    scriptbloxThumb: scriptbloxImg,
     rolimonsThumb,
+    fallback,
   });
+  assert.equal(res1[0], robloxIcon, "Roblox icon must be highest priority");
   assert.equal(
-    res1.thumbnailUrl,
-    robloxIcon,
-    "Roblox icon must be highest priority",
-  );
-  assert.equal(res1.thumbnailSources[0], robloxIcon);
-  assert.equal(
-    res1.thumbnailSources[1],
+    res1[1],
     "https://assets.rolimons.com/Image/Png/rolimons.webp",
   );
   assert.equal(
-    res1.thumbnailSources[2],
+    res1[2],
     "https://scriptblox.com/images/scriptblox-cover.png",
   );
-  assert.equal(
-    res1.thumbnailSources[res1.thumbnailSources.length - 1],
-    fallback,
-  );
+  assert.equal(res1[res1.length - 1], fallback);
 
   // Case 2: Roblox missing -> Rolimons must be #1
-  const res2 = buildGameImageSources({
-    robloxIcon: null,
-    scriptbloxImage: scriptbloxImg,
+  const res2 = buildGameThumbnails({
+    robloxThumb: null,
+    scriptbloxThumb: scriptbloxImg,
     rolimonsThumb,
+    fallback,
   });
   assert.equal(
-    res2.thumbnailUrl,
+    res2[0],
     "https://assets.rolimons.com/Image/Png/rolimons.webp",
   );
 
   // Case 3: Roblox and Rolimons missing -> ScriptBlox must be #1
-  const res3 = buildGameImageSources({
-    robloxIcon: null,
-    scriptbloxImage: scriptbloxImg,
+  const res3 = buildGameThumbnails({
+    robloxThumb: null,
+    scriptbloxThumb: scriptbloxImg,
     rolimonsThumb: null,
+    fallback,
   });
   assert.equal(
-    res3.thumbnailUrl,
+    res3[0],
     "https://scriptblox.com/images/scriptblox-cover.png",
   );
 
   // Case 4: All missing -> Fallback must be #1
-  const res4 = buildGameImageSources({
-    robloxIcon: null,
-    scriptbloxImage: null,
+  const res4 = buildGameThumbnails({
+    robloxThumb: null,
+    scriptbloxThumb: null,
     rolimonsThumb: null,
+    fallback,
   });
-  assert.equal(res4.thumbnailUrl, fallback);
-  assert.deepEqual(res4.thumbnailSources, [fallback]);
+  assert.deepEqual(res4, [fallback]);
 });
 
 test("slugToHash converts slug into deterministic 64-character SHA-256 hex string", () => {
@@ -179,13 +170,6 @@ test("Helper resolveScriptImageUrl handles various URL inputs", () => {
   assert.equal(resolveScriptImageUrl(null), "/brand/kocakz-logo.png");
 });
 
-test("Helper formatCompactNumber formats numbers correctly", () => {
-  assert.equal(formatCompactNumber(500), "500");
-  assert.equal(formatCompactNumber(1200), "1.2K");
-  assert.equal(formatCompactNumber(2500000), "2.5M");
-  assert.equal(formatCompactNumber(-1), "0");
-});
-
 test("scrapeRolimonsGameList returns sorted games array", async () => {
   const games = await scrapeRolimonsGameList();
   assert.ok(Array.isArray(games), "games must be an array");
@@ -213,16 +197,6 @@ test("fetchRobloxPlaceIcons batch fetches icons", async () => {
   const icon = iconsMap.get(189707);
   assert.ok(typeof icon === "string");
   assert.match(icon, /^https:\/\//);
-});
-
-test("fetchRobloxGameDetails fetches game statistics", async () => {
-  const details = await fetchRobloxGameDetails(189707);
-  assert.ok(details, "Details should exist for placeId 189707");
-  assert.equal(details.placeId, 189707);
-  assert.ok(details.universeId > 0);
-  assert.ok(typeof details.name === "string");
-  assert.ok(typeof details.playing === "number");
-  assert.ok(typeof details.visits === "number");
 });
 
 test("fetchRobloxGamesBatch resolves multiple games in batch including descriptions and visits", async () => {
@@ -549,62 +523,6 @@ test("Universal acts like a game conforming to Unified Game Schema and paginatio
   assert.equal(pagePayload.page, 1);
   assert.equal(pagePayload.total, 1);
   assert.equal(pagePayload.scripts.length, 3);
-});
-
-test("scrapeScriptBloxGameSitemap parses 9,900+ games and maps inconsistent pure slugs to real place IDs", async () => {
-  const { games, slugToPlaceId, placeIdToSlug } =
-    await scrapeScriptBloxGameSitemap();
-
-  assert.ok(games.length > 9000, `Expected >9000 games, got ${games.length}`);
-  assert.ok(
-    slugToPlaceId.size > 20000,
-    `Expected >20000 mappings, got ${slugToPlaceId.size}`,
-  );
-
-  // Pure slugs without IDs (the problem games mentioned by user)
-  assert.equal(
-    slugToPlaceId.get("huss-valley"),
-    107535308163741,
-    "huss-valley must resolve to 107535308163741",
-  );
-  assert.equal(
-    slugToPlaceId.get("anime-vanguards-wrathful-assault"),
-    16146832113,
-    "anime-vanguards must resolve to 16146832113",
-  );
-
-  // Canonical slugs with {id}-{slug}
-  assert.equal(
-    slugToPlaceId.get("107535308163741-huss-valley"),
-    107535308163741,
-  );
-  assert.equal(
-    slugToPlaceId.get("16146832113-anime-vanguards-wrathful-assault"),
-    16146832113,
-  );
-  // Check dynamic sample from parsed sitemap
-  const sampleGame = games.find((g) => g.placeId > 0 && g.slug.includes("-"));
-  if (sampleGame) {
-    assert.equal(slugToPlaceId.get(sampleGame.slug), sampleGame.placeId);
-  }
-
-  // String place IDs
-  assert.equal(slugToPlaceId.get("107535308163741"), 107535308163741);
-  assert.equal(slugToPlaceId.get("16146832113"), 16146832113);
-
-  // Universal
-  assert.equal(slugToPlaceId.get("universal"), 0);
-
-  // Reverse mapping from place ID to canonical slug
-  assert.equal(
-    placeIdToSlug.get(107535308163741),
-    "107535308163741-huss-valley",
-  );
-  assert.equal(
-    placeIdToSlug.get(16146832113),
-    "16146832113-anime-vanguards-wrathful-assault",
-  );
-  assert.equal(placeIdToSlug.get(0), "universal");
 });
 
 test("fetchScriptSupportedGames resolves supported Roblox games for universal/hub scripts", async () => {

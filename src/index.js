@@ -14,7 +14,6 @@ import {
   resolveAvatarThumbnail,
   resolveGameThumbnail,
   saveCdnCache,
-  loadCdnCache,
 } from "./utils/cdn.js";
 import { scrapeRolimonsGameList } from "./scrapers/rolimons.js";
 import {

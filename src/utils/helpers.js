@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createHash } from "node:crypto";
-import { USER_AGENTS, CDN_CONFIG } from "../config.js";
+import { CDN_CONFIG } from "../config.js";
 import { resolveGameThumbnail } from "./cdn.js";
 
 /**
@@ -80,31 +80,6 @@ export function buildGameThumbnails({
   return Array.from(new Set(list.filter(Boolean)));
 }
 
-/**
- * Builds game thumbnail URL and sources in strict priority order:
- * Roblox API > ScriptBlox > Rolimons > Fallback (/brand/kocakz-logo.png)
- *
- * @param {Object} params
- * @returns {{ thumbnailUrl: string, thumbnailSources: string[] }}
- */
-export function buildGameImageSources({
-  robloxIcon,
-  scriptbloxImage,
-  rolimonsThumb,
-  fallback = "/brand/kocakz-logo.png",
-} = {}) {
-  const thumbnailSources = buildGameThumbnails({
-    robloxThumb: robloxIcon,
-    rolimonsThumb,
-    scriptbloxThumb: scriptbloxImage,
-    fallback,
-  });
-
-  return {
-    thumbnailUrl: thumbnailSources[0] || fallback,
-    thumbnailSources,
-  };
-}
 
 /**
  * Formats game path and slug according to WebAuth and ScriptBlox conventions.
@@ -343,22 +318,6 @@ export function toSafeFilename(name) {
 }
 
 /**
- * Formats a number into compact string (e.g. 1.5M, 24K).
- */
-export function formatCompactNumber(num) {
-  if (typeof num !== "number" || isNaN(num) || num < 0) return "0";
-  if (num >= 1_000_000) {
-    const formatted = (num / 1_000_000).toFixed(1);
-    return `${formatted.endsWith(".0") ? formatted.slice(0, -2) : formatted}M`;
-  }
-  if (num >= 1_000) {
-    const formatted = (num / 1_000).toFixed(1);
-    return `${formatted.endsWith(".0") ? formatted.slice(0, -2) : formatted}K`;
-  }
-  return String(Math.floor(num));
-}
-
-/**
  * Ensures directory exists recursively.
  */
 export async function ensureDir(dirPath) {
@@ -379,36 +338,6 @@ export async function writeJsonFile(filePath, data, pretty = false) {
   const content = pretty ? JSON.stringify(data, null, 2) : JSON.stringify(data);
   await fs.writeFile(tempPath, content, "utf-8");
   await fs.rename(tempPath, filePath);
-}
-
-/**
- * Checks if a remote image is reachable.
- */
-export async function isRemoteImageReachable(url, timeoutMs = 2500) {
-  if (!url || typeof url !== "string") return false;
-  const trimmed = url.trim();
-  if (!trimmed) return false;
-  if (trimmed.startsWith("/") || trimmed.startsWith("data:")) return true;
-
-  try {
-    const res = await fetch(trimmed, {
-      method: "HEAD",
-      headers: { "User-Agent": USER_AGENTS.browser },
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-    if (res.ok) return true;
-    if (res.status === 405) {
-      const getRes = await fetch(trimmed, {
-        method: "GET",
-        headers: { Range: "bytes=0-0", "User-Agent": USER_AGENTS.browser },
-        signal: AbortSignal.timeout(timeoutMs),
-      });
-      return getRes.ok || getRes.status === 206;
-    }
-    return false;
-  } catch {
-    return false;
-  }
 }
 
 /**

@@ -76,15 +76,6 @@ export const API_URLS = {
   },
   scriptblox: {
     base: "https://scriptblox.com/api",
-    fetch: "/script/fetch",
-    search: "/script/search",
-    leaderboard: "/leaderboard",
-    executors: "/executor/list",
-    script: (slugOrId) => `/script/${slugOrId}`,
-    comments: (scriptId, page = 1) => `/comment/${scriptId}?page=${page}`,
-    supportedGames: (scriptId) => `/script/games/${scriptId}`,
-    changelog: (scriptId) => `/script/changelog/${scriptId}`,
-    gameSummary: (placeIdOrSlug) => `/game/${placeIdOrSlug}`,
   },
 };
 
@@ -117,7 +108,6 @@ export const SCRAPE_LIMITS = {
 };
 
 export const RATE_LIMITS = {
-  scriptbloxIntervalMs: 250, // <= 4 requests/sec to prevent 429
   robloxChunkSize: 50, // Batch limit for Roblox thumbnails API
   requestTimeoutMs: 12000,
 };
