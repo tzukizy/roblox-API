@@ -1,47 +1,48 @@
 # JSON Structure & Data Schema Documentation
 
-This document describes the complete JSON structure and schema specifications for all datasets available in the `roblox-API` repository.
+This document describes the JSON schema and type definitions for all datasets available in `roblox-API`.
 
-All files are statically served from the GitHub Raw repository under the `/data/` directory:
-```text
-https://raw.githubusercontent.com/tzukizy/roblox-API/main/data/<path>
-```
+All files can be fetched directly without a CDN or via public Git CDN providers:
+- **Direct GitHub Raw (w/o CDN)**: `https://raw.githubusercontent.com/tzukizy/roblox-API/main/data/<path>`
+- **jsDelivr CDN**: `https://cdn.jsdelivr.net/gh/tzukizy/roblox-API@main/data/<path>`
+- **Statically CDN**: `https://cdn.statically.io/gh/tzukizy/roblox-API@main/data/<path>`
+- **GitHack CDN**: `https://raw.githack.com/tzukizy/roblox-API/main/data/<path>`
 
 ---
 
-## 🖼️ Image Object Schema
+## 🖼️ Image Object Types
 
-All images across games, scripts, profiles, and executors are stored as structured objects rather than raw strings. This gives consumers complete flexibility to load images through our optimized CDN or directly from original source URLs.
+All images in the dataset are structured objects:
 
 ### Standard Image Object
 Used for **Game Thumbnails**, **User Profiles / Avatars**, and **Executor Logos**:
 ```json
 {
-  "url": "https://cdn.kocakz.me/images/a1b2c3d4e5f6.webp",
-  "original": "https://tr.rbxcdn.com/180DAY-be85b5af1040324de15123ab4208cf84/150/150/Image/Png/noFilter"
+  "url": "string (url)",
+  "original": "string (url) | null"
 }
 ```
 
 | Field | Type | Description |
 | :--- | :--- | :--- |
-| `url` | `string` | High-performance, compressed WebP image hosted on the CDN. |
-| `original` | `string \| null` | Direct origin URL before CDN processing. `null` if fallback placeholder. |
+| `url` | `string` | CDN-hosted image URL. |
+| `original` | `string \| null` | Original image URL before CDN processing (`null` if fallback placeholder). |
 
 ### Script Image Object
-Used specifically for **Script Thumbnails** (`thumbnail` and `image`):
+Used for **Script Thumbnails** (`thumbnail` and `image`):
 ```json
 {
-  "url": "https://cdn.kocakz.me/images/f9e8d7c6b5a4.webp",
-  "original": "https://scriptblox.com/images/sb/-1-1790125848725.png",
-  "scriptblox": "https://scriptblox.com/images/script/-1-1790125848725.png"
+  "url": "string (url)",
+  "original": "string (url) | null",
+  "scriptblox": "string (url) | null"
 }
 ```
 
 | Field | Type | Description |
 | :--- | :--- | :--- |
-| `url` | `string` | High-performance, compressed WebP image hosted on the CDN. |
-| `original` | `string \| null` | Raw source URL uploaded to the CDN. |
-| `scriptblox` | `string \| null` | Direct script image URL with `/images/sb/` replaced by `/images/script/`. |
+| `url` | `string` | CDN-hosted image URL. |
+| `original` | `string \| null` | Original image URL. |
+| `scriptblox` | `string \| null` | Direct script image URL. |
 
 ---
 
@@ -49,32 +50,32 @@ Used specifically for **Script Thumbnails** (`thumbnail` and `image`):
 
 ```text
 data/
-├── manifest.json                  # Pipeline metadata, stats, and endpoint structure
+├── manifest.json                  # Metadata, duration, and directory stats
 │
 ├── home/
-│   ├── trending.json              # Top trending games (array of Game objects)
-│   ├── topscript.json             # Top executed scripts (array of Script objects)
+│   ├── trending.json              # Featured trending games (Array of Game objects)
+│   ├── topscript.json             # Top executed scripts (Array of Script objects)
 │   ├── latest.json                # Latest scripts summary (Page 1)
-│   └── latest/                    # Paginated latest scripts
+│   └── latest/                    # Paginated latest scripts (20 per page)
 │       ├── 1.json
 │       ├── 2.json
-│       └── [page].json            # 20 scripts per page
+│       └── [page].json
 │
 ├── script/
-│   └── [hash].json                # Full script details (filename is SHA-256 of the slug)
+│   └── [hash].json                # Detailed script file (filename = sha256(slug) + ".json")
 │
 ├── game/
-│   ├── games.json                 # Directory page 1 (24 games, sorted descending by players)
+│   ├── games.json                 # Directory page 1 (24 games per page)
 │   ├── games/
 │   │   ├── 1.json
-│   │   └── [page].json            # Paginated game catalog (24 games per page)
-│   ├── [id].json                  # Individual game metadata by Roblox place ID
+│   │   └── [page].json            # Paginated game directory
+│   ├── [id].json                  # Individual game metadata by place ID
 │   ├── [id]/
 │   │   ├── 1.json
-│   │   └── [page].json            # Paginated scripts for a specific game (20 per page)
+│   │   └── [page].json            # Paginated scripts belonging to a specific game
 │   ├── universal.json             # Universal / multi-game script catalog entity
 │   ├── universal/
-│   │   └── [page].json            # Paginated universal scripts (20 per page)
+│   │   └── [page].json            # Paginated universal scripts
 │   ├── 0.json                     # Alias to universal.json
 │   └── 0/                         # Alias to universal/
 │
@@ -90,11 +91,11 @@ data/
 │   └── pages/[page].json          # Paginated keyless scripts (20 per page)
 │
 ├── universal/
-│   └── scripts.json               # Aggregated universal scripts summary
+│   └── scripts.json               # Universal scripts summary
 │
 └── executor/
     ├── executors.json             # Complete list of executors
-    └── [name].json                # Per-executor detailed specs
+    └── [name].json                # Individual executor specification
 ```
 
 ---
@@ -104,79 +105,79 @@ data/
 ### 1. Unified Game Entity (`data/game/[id].json`, `data/game/universal.json`)
 ```json
 {
-  "id": 189707,
-  "name": "Natural Disaster Survival",
-  "desc": "Quickly, run around in circles! Your life depends on it!",
-  "path": "/game/189707-natural-disaster-survival",
-  "slug": "189707-natural-disaster-survival",
+  "id": "number",
+  "name": "string",
+  "desc": "string",
+  "path": "string",
+  "slug": "string",
   "thumbnail": {
-    "url": "https://cdn.kocakz.me/images/a1b2c3d4e5f6.webp",
-    "original": "https://tr.rbxcdn.com/180DAY-be85b5af1040324de15123ab4208cf84/150/150/Image/Png/noFilter"
+    "url": "string (url)",
+    "original": "string (url) | null"
   },
-  "playing": 5781,
-  "visitor": 4502938627,
-  "verified": true,
-  "updatedAt": "2026-10-08T07:02:04.664Z",
+  "playing": "number",
+  "visitor": "number",
+  "verified": "boolean",
+  "updatedAt": "string (ISO 8601)",
   "creator": {
-    "name": "Stickmasterluke",
-    "type": "User"
+    "name": "string",
+    "type": "\"User\" | \"Group\" | \"Community\""
   },
   "script": {
-    "count": 229,
-    "freeCount": 229,
-    "keyCount": 29,
-    "verifiedCount": 7
+    "count": "number",
+    "freeCount": "number",
+    "keyCount": "number",
+    "verifiedCount": "number"
   }
 }
 ```
 
-### 2. Paginated Games Directory (`data/game/games.json`, `data/game/games/[page].json`)
+### 2. Paginated Games Catalog (`data/game/games.json`, `data/game/games/[page].json`)
 ```json
 {
   "games": [
-    /* Array of Unified Game Entities (24 per page) */
+    /* Array of Unified Game Entities */
   ],
-  "total": 7600,
-  "currentPage": 1,
-  "totalPages": 320,
-  "hasNextPage": true,
-  "hasPrevPage": false,
-  "nextPage": 2,
-  "prevPage": null
+  "total": "number",
+  "currentPage": "number",
+  "totalPages": "number",
+  "hasNextPage": "boolean",
+  "hasPrevPage": "boolean",
+  "nextPage": "number | null",
+  "prevPage": "number | null"
 }
 ```
 
-### 3. Paginated Scripts for a Game (`data/game/[id]/[page].json`)
+### 3. Paginated Scripts within a Game (`data/game/[id]/[page].json`)
 ```json
 {
-  "id": 189707,
-  "name": "Natural Disaster Survival",
-  "desc": "Quickly, run around in circles! Your life depends on it!",
-  "path": "/game/189707-natural-disaster-survival",
-  "slug": "189707-natural-disaster-survival",
+  "id": "number",
+  "name": "string",
+  "desc": "string",
+  "path": "string",
+  "slug": "string",
   "thumbnail": {
-    "url": "https://cdn.kocakz.me/images/a1b2c3d4e5f6.webp",
-    "original": "https://tr.rbxcdn.com/..."
+    "url": "string (url)",
+    "original": "string (url) | null"
   },
-  "playing": 5781,
-  "visitor": 4502938627,
-  "verified": true,
-  "updatedAt": "2026-10-08T07:02:04.664Z",
+  "playing": "number",
+  "visitor": "number",
+  "verified": "boolean",
+  "updatedAt": "string (ISO 8601)",
   "creator": {
-    "name": "Stickmasterluke",
-    "type": "User"
+    "name": "string",
+    "type": "\"User\" | \"Group\" | \"Community\""
   },
   "script": {
-    "count": 229,
-    "freeCount": 229,
-    "keyCount": 29,
-    "verifiedCount": 7
+    "count": "number",
+    "freeCount": "number",
+    "keyCount": "number",
+    "verifiedCount": "number"
   },
-  "page": 1,
-  "next": 2,
-  "total": 12,
+  "page": "number",
+  "next": "number | null",
+  "total": "number",
   "scripts": [
-    /* Array of complete Script Entities (up to 20 per page) */
+    /* Array of Script Entities */
   ]
 }
 ```
@@ -186,91 +187,99 @@ data/
 ## 📜 Script Schemas
 
 ### 1. Detailed Script Entity (`data/script/[hash].json`)
-Each file is stored under `data/script/<hash>.json`, where `<hash>` is the SHA-256 hash of the script's `slug`.
-
 ```json
 {
-  "_id": "661abe141431aff595533655",
-  "title": "Natural Disaster Survival Autofarm",
-  "slug": "natural-disaster-survival-autofarm",
+  "_id": "string",
+  "title": "string",
+  "slug": "string",
   "game": {
-    "name": "Natural Disaster Survival",
-    "gameId": 189707,
-    "placeId": 189707,
+    "name": "string",
+    "gameId": "number",
+    "placeId": "number",
     "imageUrl": {
-      "url": "https://cdn.kocakz.me/images/e5f6a1b2c3d4.webp",
-      "original": "https://tr.rbxcdn.com/..."
+      "url": "string (url)",
+      "original": "string (url) | null"
     }
   },
-  "script": "loadstring(game:HttpGet('https://example.com/script.lua'))()",
-  "scriptType": "free",
-  "key": false,
-  "keyLink": "",
-  "verified": true,
-  "views": 15420,
-  "likeCount": 352,
-  "dislikeCount": 12,
+  "script": "string",
+  "scriptType": "\"free\" | \"paid\"",
+  "key": "boolean",
+  "keyLink": "string (url) | null",
+  "verified": "boolean",
+  "views": "number",
+  "likeCount": "number",
+  "dislikeCount": "number",
   "thumbnail": {
-    "url": "https://cdn.kocakz.me/images/f9e8d7c6b5a4.webp",
-    "original": "https://scriptblox.com/images/sb/-1-1790125848725.png",
-    "scriptblox": "https://scriptblox.com/images/script/-1-1790125848725.png"
+    "url": "string (url)",
+    "original": "string (url) | null",
+    "scriptblox": "string (url) | null"
   },
   "image": {
-    "url": "https://cdn.kocakz.me/images/f9e8d7c6b5a4.webp",
-    "original": "https://scriptblox.com/images/sb/-1-1790125848725.png",
-    "scriptblox": "https://scriptblox.com/images/script/-1-1790125848725.png"
+    "url": "string (url)",
+    "original": "string (url) | null",
+    "scriptblox": "string (url) | null"
   },
   "owner": {
-    "_id": "642a8b9f1234567890abcdef",
-    "username": "ScriptDeveloper",
+    "_id": "string",
+    "username": "string",
     "profile": {
-      "url": "https://cdn.kocakz.me/images/1234abcd5678.webp",
-      "original": "https://..."
+      "url": "string (url)",
+      "original": "string (url) | null"
     },
     "profilePicture": {
-      "url": "https://cdn.kocakz.me/images/1234abcd5678.webp",
-      "original": "https://..."
+      "url": "string (url)",
+      "original": "string (url) | null"
     },
-    "verified": true
+    "verified": "boolean"
   },
-  "features": ["Auto Farm", "Teleport", "Item ESP"],
-  "tags": ["survival", "autofarm", "esp"],
-  "isUniversal": false,
-  "isHub": false,
-  "supportedGames": [],
+  "features": ["string"],
+  "tags": ["string"],
+  "isUniversal": "boolean",
+  "isHub": "boolean",
+  "supportedGames": [
+    {
+      "gameId": "number",
+      "placeId": "number",
+      "name": "string",
+      "imageUrl": {
+        "url": "string (url)",
+        "original": "string (url) | null"
+      }
+    }
+  ],
   "comments": [
     {
-      "_id": "c101",
-      "text": "Works perfectly on Solara!",
+      "_id": "string",
+      "text": "string",
       "commentBy": {
-        "username": "Tester123",
+        "username": "string",
         "profile": {
-          "url": "https://cdn.kocakz.me/images/avatar99.webp",
-          "original": "https://..."
+          "url": "string (url)",
+          "original": "string (url) | null"
         }
       },
-      "createdAt": "2026-09-15T12:00:00.000Z"
+      "createdAt": "string (ISO 8601)"
     }
   ],
   "changelog": [
     {
-      "version": "1.2.0",
-      "description": "Added new teleport locations",
-      "updatedAt": "2026-09-10T08:00:00.000Z"
+      "version": "string",
+      "description": "string",
+      "updatedAt": "string (ISO 8601)"
     }
   ],
-  "createdAt": "2026-04-13T16:50:28.000Z",
-  "updatedAt": "2026-09-20T10:15:00.000Z"
+  "createdAt": "string (ISO 8601)",
+  "updatedAt": "string (ISO 8601)"
 }
 ```
 
 ### 2. Paginated Script List (`data/home/latest/[page].json`, `data/keyless/pages/[page].json`)
 ```json
 {
-  "page": 1,
-  "totalPages": 3686,
+  "page": "number",
+  "totalPages": "number",
   "scripts": [
-    /* Array of Script Entities (20 per page) */
+    /* Array of Script Entities */
   ]
 }
 ```
@@ -279,27 +288,27 @@ Each file is stored under `data/script/<hash>.json`, where `<hash>` is the SHA-2
 
 ## ⚡ Executor Schemas
 
-### 1. Executors List (`data/executor/executors.json`) & Spec (`data/executor/[name].json`)
+### 1. Executor Entity (`data/executor/executors.json`, `data/executor/[name].json`)
 ```json
 {
-  "name": "Wave",
-  "slug": "wave",
-  "title": "Wave Executor",
-  "description": "Fast and powerful Windows script executor.",
+  "name": "string",
+  "slug": "string",
+  "title": "string",
+  "description": "string",
   "logo": {
-    "url": "https://cdn.kocakz.me/images/wave_logo.webp",
-    "original": "https://example.com/wave-icon.png"
+    "url": "string (url)",
+    "original": "string (url) | null"
   },
   "thumbnail": {
-    "url": "https://cdn.kocakz.me/images/wave_banner.webp",
-    "original": "https://example.com/wave-banner.png",
-    "scriptblox": "https://example.com/wave-banner.png"
+    "url": "string (url)",
+    "original": "string (url) | null",
+    "scriptblox": "string (url) | null"
   },
-  "status": "Updated",
-  "sunc": 98,
-  "weao": "Working",
-  "downloadUrl": "https://example.com/download",
-  "platform": "Windows"
+  "status": "\"Updated\" | \"Updating\" | \"Patched\"",
+  "sunc": "number",
+  "weao": "string",
+  "downloadUrl": "string (url)",
+  "platform": "\"Windows\" | \"Android\" | \"iOS\" | \"Mac\""
 }
 ```
 
@@ -308,26 +317,26 @@ Each file is stored under `data/script/<hash>.json`, where `<hash>` is the SHA-2
 ## 📊 Trending & Leaderboard Schemas
 
 ### Leaderboard Entity (`data/trending/[period].json`)
-Periods: `day`, `week`, `month`, `all`.
+`[period]` can be `"day"`, `"week"`, `"month"`, or `"all"`.
 
 ```json
 {
-  "period": "day",
+  "period": "\"day\" | \"week\" | \"month\" | \"all\"",
   "leaderboard": {
     "boards": {
       "scripts": {
         "executes": [
-          /* Array of Script Entities ranked by execution count */
+          /* Array of Script Entities */
         ]
       },
       "creators": {
         "likes": [
           {
-            "username": "TopCreator",
-            "likes": 1420,
+            "username": "string",
+            "likes": "number",
             "profile": {
-              "url": "https://cdn.kocakz.me/images/creator1.webp",
-              "original": "https://..."
+              "url": "string (url)",
+              "original": "string (url) | null"
             }
           }
         ]
@@ -342,53 +351,53 @@ Periods: `day`, `week`, `month`, `all`.
 ## 📋 Manifest Schema (`data/manifest.json`)
 ```json
 {
-  "updatedAt": "2026-10-14T02:50:00.000Z",
-  "durationSeconds": 182,
+  "updatedAt": "string (ISO 8601)",
+  "durationSeconds": "number",
   "stats": {
-    "gamesScraped": 7733,
-    "gamePagesCreated": 323,
-    "gameDetailsCreated": 7733,
-    "gameScriptPagesCreated": 1450,
-    "scriptsScraped": 73933,
-    "individualScriptsSaved": 73933,
-    "executorsScraped": 31,
-    "leaderboardsScraped": 4,
-    "latestPagesScraped": 3697
+    "gamesScraped": "number",
+    "gamePagesCreated": "number",
+    "gameDetailsCreated": "number",
+    "gameScriptPagesCreated": "number",
+    "scriptsScraped": "number",
+    "individualScriptsSaved": "number",
+    "executorsScraped": "number",
+    "leaderboardsScraped": "number",
+    "latestPagesScraped": "number"
   },
   "structure": {
     "home": {
-      "trending": "data/home/trending.json",
-      "topscript": "data/home/topscript.json",
-      "latest": "data/home/latest.json",
-      "latestPages": "data/home/latest/{page}.json"
+      "trending": "string",
+      "topscript": "string",
+      "latest": "string",
+      "latestPages": "string"
     },
     "script": {
-      "detail": "data/script/{hash}.json"
+      "detail": "string"
     },
     "game": {
-      "games": "data/game/games.json",
-      "pages": "data/game/games/{page}.json",
-      "detail": "data/game/{id}.json",
-      "scripts": "data/game/{id}/{page}.json",
-      "universal": "data/game/universal.json",
-      "universalPages": "data/game/universal/{page}.json"
+      "games": "string",
+      "pages": "string",
+      "detail": "string",
+      "scripts": "string",
+      "universal": "string",
+      "universalPages": "string"
     },
     "trending": {
-      "day": "data/trending/day.json",
-      "week": "data/trending/week.json",
-      "month": "data/trending/month.json",
-      "all": "data/trending/all.json"
+      "day": "string",
+      "week": "string",
+      "month": "string",
+      "all": "string"
     },
     "keyless": {
-      "scripts": "data/keyless/scripts.json",
-      "pages": "data/keyless/pages/{page}.json"
+      "scripts": "string",
+      "pages": "string"
     },
     "universal": {
-      "scripts": "data/universal/scripts.json"
+      "scripts": "string"
     },
     "executor": {
-      "executors": "data/executor/executors.json",
-      "spec": "data/executor/{name}.json"
+      "executors": "string",
+      "spec": "string"
     }
   }
 }
