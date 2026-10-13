@@ -1,253 +1,160 @@
-# Roblox & ScriptBlox Scraper API (`roblox-API`)
+# Roblox Dataset API (`roblox-API`)
 
-An automated Node.js scraping pipeline and GitHub Actions workflow. Aggregates and enriches live game, exploit, and script data from **Rolimons**, **ScriptBlox**, and official **Roblox APIs**, publishing static JSON datasets directly into `./data/`.
-
-These JSON files replace dynamic upstream requests across `WebAuth/src/app/script*` pages, completely eliminating 429 rate limit issues, timeouts, and bot-detection blocks. If an item is ever missing from GitHub data, your application can fall back to the live API.
+A static, publicly accessible JSON dataset providing Roblox experiences, scripts, executors, and leaderboard records. All data is served directly through GitHub Raw with zero rate limits, no authentication required, and zero server infrastructure needed.
 
 ---
 
-## 🖼️ Game Image Priority Order & Normalization
+## 🌐 Base URLs
 
-When resolving images for games and experiences, the scraper strictly enforces this priority order:
-
-1. **Roblox API**: Live Roblox Thumbnails API icon (`https://tr.rbxcdn.com/...`), with dimensions normalized to `150/150` via regex `.replace(/^(https:\/\/tr\.rbxcdn\.com\/[^/]+\/)\d+\/\d+(\/.*)$/, "$1150/150$2")`.
-2. **Rolimons**: Rolimons game thumbnail (`.png`, then `.webp`).
-3. **ScriptBlox**: Game thumbnail or script image from ScriptBlox CDN.
-4. **Fallback**: `/brand/kocakz-logo.png`.
+| Service | Base URL | Description |
+| :--- | :--- | :--- |
+| **GitHub Raw (Data)** | `https://raw.githubusercontent.com/tzukizy/roblox-API/main/data` | Static JSON files containing all games, scripts, and executor data. |
+| **Image CDN** | `https://cdn.kocakz.me/images/` | High-performance CDN serving compressed WebP images. |
 
 ---
 
-## 🎮 Unified Game Schema
+## 🖼️ Working with Images (With CDN vs Without CDN)
 
-Every game across `/game/games.json`, `/game/games/[page].json`, `/game/[id].json`, and `/home/trending.json` conforms to this exact schema:
+All image fields across the dataset (game thumbnails, script thumbnails, user avatars, executor logos) are structured as dedicated objects rather than flat strings:
 
 ```json
 {
-  "id": 189707,
-  "name": "Natural Disaster Survival",
-  "desc": "Quickly, run around in circles! Your life depends on it!",
-  "path": "/game/189707-natural-disaster-survival",
-  "slug": "189707-natural-disaster-survival",
-  "thumbnail": [
-    "https://tr.rbxcdn.com/180DAY-7ea7065a02f8cff80f8b0270a9ad2d3b/150/150/Image/Png/noFilter",
-    "https://assets.rolimons.com/Image/Png/189707.png",
-    "https://scriptblox.com/images/...",
-    "/brand/kocakz-logo.png"
-  ],
-  "playing": 5781,
-  "visitor": 4502938627,
-  "verified": true,
-  "updatedAt": "2026-10-08T07:02:04.664Z",
-  "creator": {
-    "name": "Stickmasterluke",
-    "type": "User"
-  },
-  "script": {
-    "count": 229,
-    "freeCount": 229,
-    "keyCount": 29,
-    "verifiedCount": 7
-  }
+  "url": "https://cdn.kocakz.me/images/a1b2c3d4e5f6.webp",
+  "original": "https://tr.rbxcdn.com/180DAY-be85b5af1040324de15123ab4208cf84/150/150/Image/Png/noFilter"
 }
 ```
 
-If a game has scripts (`script.count > 0`), paginated pages are generated under `/data/game/[id]/[page].json` adding:
-
+Script thumbnails additionally provide a `scriptblox` direct URL:
 ```json
 {
-  "...": "...(all game metadata above)",
-  "page": 1,
-  "next": 2,
-  "total": 12,
-  "scripts": [
-    /* 100% complete Script entities */
-  ]
+  "url": "https://cdn.kocakz.me/images/f9e8d7c6b5a4.webp",
+  "original": "https://scriptblox.com/images/sb/-1-1790125848725.png",
+  "scriptblox": "https://scriptblox.com/images/script/-1-1790125848725.png"
 }
 ```
 
----
+### Option 1: Using the CDN (Recommended)
+Use `.url` to load optimized, cached WebP images served from our CDN:
+```javascript
+const imageUrl = script.thumbnail.url;
+```
 
-## 🔑 100% Complete Script Details via `https://scriptblox.com/api/script/[slug]`
+### Option 2: Without CDN (`w/o CDN`)
+If you prefer not to depend on our CDN or want direct access to the original source images, use `.original` (or `.scriptblox` for script images):
+```javascript
+// Direct origin without routing through the CDN:
+const imageUrl = script.thumbnail.original || script.thumbnail.url;
 
-Unlike the basic `/api/script/fetch` endpoint (which omits Lua code, features, owner profiles, and discord/key links), the scraper fetches each script using **`https://scriptblox.com/api/script/[slug]`** to capture the full script entity:
-
-- `script.script`: Raw Lua code string for execution
-- `features` & `tags`
-- `owner`: Detailed creator profile with milestones
-- `discord` & `keyLink`
-- `likeCount` & `dislikeCount`
-- `game.gameId` / `game.placeId`: Verified Roblox place ID
-
-Scripts are stored under `/data/script/[hash].json` using a deterministic 64-character SHA-256 hash:
-
-$$\text{filename} = \text{sha256}(\text{slug}) + \text{".json"}$$
-
----
-
-## 🎯 Native Game ID Guarantee (Why WebAuth's Missing ID Bug is Solved)
-
-In WebAuth, game URLs were previously generated as pure slugs without an ID (e.g. `/script/game/huss-valley` instead of `/script/game/107535308163741-huss-valley`).
-
-This occurred because WebAuth previously called the upstream `/api/script/fetch` endpoint, which omits `game.gameId` in its lightweight list response. When WebAuth rendered script cards, `getScriptGameSlug(script.game?.gameId, script.game?.name)` received `undefined` for `gameId` and was forced to output a pure slug without an ID.
-
-### How the Scraper Solves This at the Root
-
-The scraper fetches full script details using `https://scriptblox.com/api/script/[slug]`. This endpoint **always includes the verified numeric `game.gameId`**:
-
-- Every script in `/data/home/latest.json`, `/data/home/topscript.json`, `/data/trending/*.json`, and `/data/game/*` has `game.gameId` and `game.placeId` populated (`107535308163741` for Huss Valley, `16146832113` for Anime Vanguards, `0` for Universal).
-- When WebAuth renders script cards from this data, `getScriptGameSlug(script.game.gameId, script.game.name)` always outputs the canonical URL:
-  $$\text{/script/game/107535308163741-huss-valley}$$
-- Pure slugs without an ID are **never generated anywhere on the website in the first place**, completely eliminating the need for runtime sitemap lookups or external slug maps.
-
----
-
-## 🌐 Universal & Script Hubs (`gameId: -1` or `0`)
-
-Scripts with `gameId: -1`, `gameId: 0`, or `isUniversal: true` (such as multi-game hubs like _YARHM_, _V.G Hub_, or admin command panels like _Infinite Yield_):
-
-1. **Classified & Normalized**: Normalized with `isUniversal: true`, `isHub: true`, `game.gameId: 0`, and `game.placeId: 0`.
-2. **Supported Games Resolution**: The scraper calls `https://scriptblox.com/api/script/games/[scriptId]` to resolve all Roblox games supported by the hub script.
-3. **Cross-Indexed**:
-   - The script is included in `/data/game/universal.json` and paginated in `/data/game/universal/[page].json` (aliased to `/data/game/0.json`).
-   - The script is **cross-indexed** into each supported game's page (e.g. _Flee the Facility_ `893973440` and _Murder Mystery 2_ `91595887553937`), ensuring users viewing individual game pages also discover supported hub scripts.
-
----
-
-## 📁 Data Directory Structure (`./data`)
-
-```text
-data/
-├── manifest.json                  # Metadata, duration, total counts, timestamp
-│
-├── home/                          # Home "/script"
-│   ├── trending.json              # Top trending games (array of UnifiedGame)
-│   ├── topscript.json             # Top executed scripts (complete Script entities)
-│   ├── latest.json                # Latest scripts summary (page 1)
-│   └── latest/                    # Paginated latest scripts (up to 3,686 pages from sitemaps)
-│       ├── 1.json
-│       ├── 2.json
-│       └── ...[1-3686].json       # Split 20 scripts per page discovering all 73,700+ scripts
-│
-├── script/                        # Script "/script/:slug"
-│   └── [hash].json                # Fixed 64-char hex hash file per script (full Lua code, changelog, comments, author)
-│
-├── game/                          # Games "/script/game" & Game "/script/game/:id+gameSlug"
-│   ├── games.json                 # Page 1 of games directory (24 games, sorted descending by active players)
-│   ├── games/                     # Paginated game directory (all 7,600+ games, 24 games per page)
-│   │   ├── 1.json                 # Page 1 (identical to games.json)
-│   │   ├── 2.json                 # Page 2
-│   │   └── ...[1-320+].json       # All pages covering all 7,600+ experiences from Rolimons
-│   ├── [id].json                  # Complete UnifiedGame metadata object
-│   ├── [id]/                      # Paginated scripts for games where script.count > 0 (includes hub scripts)
-│   │   ├── 1.json                 # UnifiedGame + page: 1, next: 2, total: N, scripts: [...]
-│   │   └── ...[page].json
-│   ├── universal.json             # Universal Scripts game metadata entity (acts like a game)
-│   ├── universal/                 # Paginated universal scripts (/script/game/universal)
-│   │   ├── 1.json                 # UnifiedGame + page: 1, next: 2, total: N, scripts: [...]
-│   │   └── ...[page].json
-│   ├── 0.json                     # Alias to universal.json
-│   └── 0/                         # Alias to universal/
-│
-├── trending/                      # Leaderboards "/script/trending" (gameId & placeId fixed)
-│   ├── index.json                 # Overview
-│   ├── day.json                   # Today's top scripts & creators
-│   ├── week.json                  # Weekly leaderboard
-│   ├── month.json                 # Monthly leaderboard
-│   └── all.json                   # All-time leaderboard
-│
-├── keyless/                       # Keyless "/script/keyless"
-│   ├── scripts.json               # Aggregated keyless scripts
-│   └── pages/[page].json          # Paginated keyless scripts
-│
-├── universal/                     # Legacy universal scripts path
-│   └── scripts.json               # Aggregated universal scripts
-│
-└── executor/                      # Executors "/script/executor"
-    ├── executors.json             # All 31 executors with sUNC and WEAO status
-    └── [name].json                # Per-executor detailed specs
+// Or for script thumbnails specifically:
+const directScriptImage = script.thumbnail.scriptblox || script.thumbnail.original;
 ```
 
 ---
 
-## 🎮 How WebAuth Loads Paginated Games (`/script/game`)
+## 📑 Endpoints & File Directory
 
-```typescript
-import { fetchPaginatedGames, PaginatedGamesResult } from "@/lib/rolimons";
+Fetch any dataset by appending its path to the GitHub Raw base URL:
 
-const DATA_BASE_URL =
-  "https://raw.githubusercontent.com/tzukizy/roblox-API/main/data";
+$$\text{Endpoint URL} = \text{https://raw.githubusercontent.com/tzukizy/roblox-API/main/data/} + \text{path}$$
 
-export async function getPaginatedGames(
-  page = 1,
-  pageSize = 24,
-): Promise<PaginatedGamesResult> {
-  const url =
-    page === 1
-      ? `${DATA_BASE_URL}/game/games.json`
-      : `${DATA_BASE_URL}/game/games/${page}.json`;
+### 🎮 Games Directory (`/game`)
+| Path | Description |
+| :--- | :--- |
+| `game/games.json` | First page of games catalog (24 games, sorted descending by active players). |
+| `game/games/{page}.json` | Paginated catalog (`1.json`, `2.json`, ... covering 7,600+ games). |
+| `game/{id}.json` | Individual game metadata by numeric Roblox Place ID (e.g. `189707.json`). |
+| `game/{id}/{page}.json` | Paginated scripts belonging to a specific game (20 scripts per page). |
+| `game/universal.json` | Universal catalog entity for multi-game scripts and admin panels. |
+| `game/universal/{page}.json` | Paginated universal scripts (`1.json`, `2.json`, ...). |
 
-  try {
-    const res = await fetch(url, { next: { revalidate: 3600 } });
-    if (res.ok) {
-      return await res.json();
-    }
-  } catch (err) {
-    console.warn(
-      `[GitHub Data] Failed to fetch page ${page}, using API fallback:`,
-      err,
-    );
-  }
+### 📜 Scripts Directory (`/script` & `/home`)
+| Path | Description |
+| :--- | :--- |
+| `home/trending.json` | Featured trending games list. |
+| `home/topscript.json` | Top executed scripts list. |
+| `home/latest.json` | Page 1 summary of latest published scripts. |
+| `home/latest/{page}.json` | Paginated latest scripts (`1.json` up to `3600+.json`, 20 per page). |
+| `keyless/scripts.json` | Overview of scripts that do not require an execution key. |
+| `keyless/pages/{page}.json`| Paginated keyless scripts (`1.json`, `2.json`, ...). |
+| `script/{hash}.json` | Detailed script file (full Lua script code, verified author, changelog, comments). |
 
-  // Fallback to live Rolimons + Roblox API
-  return await fetchPaginatedGames(page, pageSize);
+> **Note on Script Filenames**: Detailed scripts under `script/` are stored using the SHA-256 hash of their slug:
+> $$\text{filename} = \text{sha256}(\text{slug}) + \text{".json"}$$
+
+### ⚡ Executors (`/executor`)
+| Path | Description |
+| :--- | :--- |
+| `executor/executors.json` | Complete list of all Roblox executors with sUNC scores and status. |
+| `executor/{name}.json` | Individual executor specification by name/slug. |
+
+### 📊 Trending & Leaderboards (`/trending`)
+| Path | Description |
+| :--- | :--- |
+| `trending/day.json` | Daily top scripts and creator rankings. |
+| `trending/week.json` | Weekly top scripts and creator rankings. |
+| `trending/month.json` | Monthly top scripts and creator rankings. |
+| `trending/all.json` | All-time top scripts and creator rankings. |
+
+---
+
+## 💻 Quick Code Examples
+
+### JavaScript / TypeScript
+```javascript
+const RAW_BASE = "https://raw.githubusercontent.com/tzukizy/roblox-API/main/data";
+
+// 1. Fetch games directory (page 1)
+async function getGames(page = 1) {
+  const res = await fetch(`${RAW_BASE}/game/games/${page}.json`);
+  const data = await res.json();
+  return data.games;
+}
+
+// 2. Fetch script details using slug
+async function getScriptBySlug(slug) {
+  const crypto = await import("crypto");
+  const hash = crypto.createHash("sha256").update(slug).digest("hex");
+  const res = await fetch(`${RAW_BASE}/script/${hash}.json`);
+  return await res.json();
 }
 ```
 
----
+### Python
+```python
+import hashlib
+import requests
 
-## 🚀 How It Replaces `WebAuth/src/app/script*`
+RAW_BASE = "https://raw.githubusercontent.com/tzukizy/roblox-API/main/data"
 
-| WebAuth Page / Route          | Original Function                         | Scraped JSON Source                                              | Fallback Behavior                                  |
-| :---------------------------- | :---------------------------------------- | :--------------------------------------------------------------- | :------------------------------------------------- |
-| **`/script` (Home)**          | `fetchTrendingGames(8)`                   | `data/home/trending.json`                                        | Call `fetchTrendingGames(8)`                       |
-| **`/script` (Home)**          | `fetchTopExecutedScripts(8)`              | `data/home/topscript.json`                                       | Call `fetchTopExecutedScripts(8)`                  |
-| **`/script` (Home)**          | `fetchScripts(options)`                   | `data/home/latest.json` or `data/home/latest/[page].json`        | Call `fetchScripts(options)`                       |
-| **`/script/[slug]`**          | `fetchScriptDetailed(slug)`               | `data/script/[hash].json`                                        | Call `fetchScriptDetailed(slug)`                   |
-| **`/script/game`**            | `fetchPaginatedGames(page, 24)`           | `data/game/games.json` (page 1) or `data/game/games/[page].json` | Call `fetchPaginatedGames(page, 24)`               |
-| **`/script/game/:id+slug`**   | `fetchRobloxGameDetails` + `fetchScripts` | `data/game/[id].json`                                            | Call `fetchGameSummary` + `fetchRobloxGameDetails` |
-| **`/script/game/universal`**  | `fetchScripts({ universal: 1 })`          | `data/game/universal.json` or `data/game/universal/[page].json`  | Call `fetchScripts({ universal: 1 })`              |
-| **`/script/trending`**        | `fetchLeaderboard(period)`                | `data/trending/[period].json`                                    | Call `fetchLeaderboard(period)`                    |
-| **`/script/keyless`**         | `fetchScripts({ keyless: 1 })`            | `data/keyless/scripts.json`                                      | Call `fetchScripts({ keyless: 1 })`                |
-| **`/script/executor`**        | `fetchExecutors()`                        | `data/executor/executors.json`                                   | Call `fetchExecutors()`                            |
-| **`/script/executor/[name]`** | `fetchExecutor(name)`                     | `data/executor/[name].json`                                      | Call `fetchExecutor(name)`                         |
+# Fetch latest scripts
+response = requests.get(f"{RAW_BASE}/home/latest/1.json")
+scripts = response.json()["scripts"]
 
----
-
-## 🤖 GitHub Actions Workflow
-
-Configured in `.github/workflows/scrape.yml`:
-
-- **Schedule**: Automatically runs every 3 days (`0 0 */3 * *`).
-- **Manual Trigger**: Can be run anytime via the **Run workflow** button on GitHub.
-- **Auto-commit**: Pushes `./data/` updates back to the repo with `[skip ci]`.
-
----
-
-## 🛠️ Local Commands
-
-```powershell
-# Run unit and integration tests (fast, consumes zero scrape quota)
-npm test
-
-# Run limited test scraper (2 pages scripts, 48 games, 5 Roblox details)
-npm run scrape-test
-
-# Run complete scraper locally (discovers all 73,700+ scripts, all 14,000+ games)
-npm run scrape
-
-# Optional: Run with custom environment limits
-$env:MAX_PAGES = "5"; $env:MAX_CATALOG_GAMES = "48"; npm run scrape
+for item in scripts:
+    title = item["title"]
+    # With CDN:
+    cdn_thumb = item["thumbnail"]["url"]
+    # Without CDN:
+    direct_thumb = item["thumbnail"].get("original") or cdn_thumb
+    print(f"{title} -> {direct_thumb}")
 ```
+
+### cURL
+```bash
+# Fetch game metadata for Natural Disaster Survival (189707)
+curl -s "https://raw.githubusercontent.com/tzukizy/roblox-API/main/data/game/189707.json"
+
+# Fetch all executors
+curl -s "https://raw.githubusercontent.com/tzukizy/roblox-API/main/data/executor/executors.json"
+```
+
+---
+
+## 📖 Complete JSON Schema Specification
+
+For full payload examples, property types, and field definitions across all objects (Games, Scripts, Comments, Executors, Manifest), please see:
+
+👉 **[docs/structure.md](docs/structure.md)**
 
 ---
 
