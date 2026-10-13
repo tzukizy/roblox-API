@@ -215,20 +215,26 @@ export async function runScraper() {
       }
 
       // 1. Resolve script thumbnail through CDN (process: true)
-      const cdnImage = await resolveScriptThumbnail(base.image);
+      // Returns { url, original, scriptblox }
+      const cdnThumbnail = await resolveScriptThumbnail(
+        base.thumbnail || base.image,
+      );
 
       // 2. Resolve owner avatar through CDN (process: false)
+      // Returns { url, original }
       let resolvedOwner = base.owner ? { ...base.owner } : null;
       if (resolvedOwner) {
-        resolvedOwner.profilePicture = await resolveAvatarThumbnail(
-          resolvedOwner.profilePicture,
+        const resolvedProfile = await resolveAvatarThumbnail(
+          resolvedOwner.profile || resolvedOwner.profilePicture,
         );
+        resolvedOwner.profile = resolvedProfile;
+        resolvedOwner.profilePicture = resolvedProfile;
       }
 
       // 3. Resolve game image if present (process: false)
-      let resolvedGameImage = base.game?.imageUrl || "";
+      let resolvedGameImage = base.game?.imageUrl || base.game?.thumbnail || "";
       if (resolvedGameImage) {
-        resolvedGameImage = await resolveGameThumbnail([resolvedGameImage]);
+        resolvedGameImage = await resolveGameThumbnail(resolvedGameImage);
       }
 
       // 4. Resolve supported games images if present
@@ -236,10 +242,13 @@ export async function runScraper() {
       const resolvedSupportedGames = Array.isArray(rawSupported)
         ? await Promise.all(
             rawSupported.map(async (sg) => {
-              if (sg.imageUrl) {
+              const sgImg = sg.imageUrl || sg.thumbnail;
+              if (sgImg) {
+                const thumbObj = await resolveGameThumbnail(sgImg);
                 return {
                   ...sg,
-                  imageUrl: await resolveGameThumbnail([sg.imageUrl]),
+                  imageUrl: thumbObj,
+                  thumbnail: thumbObj,
                 };
               }
               return sg;
@@ -255,14 +264,15 @@ export async function runScraper() {
       const resolvedComments = Array.isArray(rawComments)
         ? await Promise.all(
             rawComments.map(async (c) => {
-              if (c.commentBy?.profilePicture) {
+              if (c.commentBy?.profilePicture || c.commentBy?.profile) {
+                const rawPic = c.commentBy.profile || c.commentBy.profilePicture;
+                const avatarObj = await resolveAvatarThumbnail(rawPic);
                 return {
                   ...c,
                   commentBy: {
                     ...c.commentBy,
-                    profilePicture: await resolveAvatarThumbnail(
-                      c.commentBy.profilePicture,
-                    ),
+                    profile: avatarObj,
+                    profilePicture: avatarObj,
                   },
                 };
               }
@@ -273,7 +283,8 @@ export async function runScraper() {
 
       const fullScript = {
         ...base,
-        image: cdnImage,
+        thumbnail: cdnThumbnail,
+        image: cdnThumbnail,
         owner: resolvedOwner,
         isUniversal: Boolean(base.isUniversal || finalPlaceId === 0),
         isHub: Boolean(base.isHub),
@@ -292,6 +303,7 @@ export async function runScraper() {
               ? "Universal Scripts"
               : `Game #${finalPlaceId}`),
           imageUrl: resolvedGameImage,
+          thumbnail: resolvedGameImage,
           gameId: finalPlaceId,
           placeId: finalPlaceId,
         },
@@ -305,17 +317,24 @@ export async function runScraper() {
       );
     }
 
+    const fallbackThumb = await resolveScriptThumbnail(
+      scriptSummary.thumbnail || scriptSummary.image,
+    );
+    let fallbackOwner = scriptSummary.owner
+      ? { ...scriptSummary.owner }
+      : null;
+    if (fallbackOwner) {
+      const fallbackAvatar = await resolveAvatarThumbnail(
+        fallbackOwner.profile || fallbackOwner.profilePicture,
+      );
+      fallbackOwner.profile = fallbackAvatar;
+      fallbackOwner.profilePicture = fallbackAvatar;
+    }
     const fallbackSummary = {
       ...scriptSummary,
-      image: await resolveScriptThumbnail(scriptSummary.image),
-      owner: scriptSummary.owner
-        ? {
-            ...scriptSummary.owner,
-            profilePicture: await resolveAvatarThumbnail(
-              scriptSummary.owner.profilePicture,
-            ),
-          }
-        : scriptSummary.owner,
+      thumbnail: fallbackThumb,
+      image: fallbackThumb,
+      owner: fallbackOwner,
     };
     scriptDetailsCache.set(slug, fallbackSummary);
     return fallbackSummary;
@@ -932,10 +951,11 @@ export async function runScraper() {
       const creatorsBoard = lbData.leaderboard?.boards?.creators?.executes;
       if (Array.isArray(creatorsBoard)) {
         for (const creator of creatorsBoard) {
-          if (creator.profilePicture) {
-            creator.profilePicture = await resolveAvatarThumbnail(
-              creator.profilePicture,
-            );
+          if (creator.profilePicture || creator.profile) {
+            const rawPic = creator.profile || creator.profilePicture;
+            const avatarObj = await resolveAvatarThumbnail(rawPic);
+            creator.profile = avatarObj;
+            creator.profilePicture = avatarObj;
           }
         }
       }

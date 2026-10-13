@@ -405,7 +405,7 @@ test("buildUnifiedGame produces exact user-specified schema with single CDN thum
       name: "Natural Disaster Survival",
       totalPlayers: 5781,
       rolimonsThumb: "https://assets.rolimons.com/Image/Webp/189707.webp",
-      robloxIcon: "https://tr.rbxcdn.com/icon/480/270/Image/Png/noFilter",
+      robloxIcon: "https://tr.rbxcdn.com/180DAY-be85b5af1040324de15123ab4208cf84/150/150/Image/Png/noFilter",
     },
     roblox: {
       description: "Quickly, run around in circles! Your life depends on it!",
@@ -433,8 +433,9 @@ test("buildUnifiedGame produces exact user-specified schema with single CDN thum
   );
   assert.equal(unified.path, "/game/189707-natural-disaster-survival");
   assert.equal(unified.slug, "189707-natural-disaster-survival");
-  assert.equal(typeof unified.thumbnail, "string");
-  assert.match(unified.thumbnail, /^https:\/\/cdn\.kocakz\.me\/images\/.+\.webp$/);
+  assert.equal(typeof unified.thumbnail, "object");
+  assert.match(unified.thumbnail.url, /^https:\/\/cdn\.kocakz\.me\/images\/.+\.webp$/);
+  assert.ok(unified.thumbnail.original);
   assert.equal(unified.playing, 5781);
   assert.equal(unified.visitor, 4502938627);
   assert.equal(unified.verified, true);
@@ -505,8 +506,8 @@ test("Universal acts like a game conforming to Unified Game Schema and paginatio
   assert.equal(universalGame.name, "Universal Scripts");
   assert.equal(universalGame.slug, "universal");
   assert.equal(universalGame.path, "/game/universal");
-  assert.equal(typeof universalGame.thumbnail, "string");
-  assert.equal(universalGame.thumbnail, "https://cdn.kocakz.me/images/no-game.webp");
+  assert.equal(typeof universalGame.thumbnail, "object");
+  assert.equal(universalGame.thumbnail.url, "https://cdn.kocakz.me/images/no-game.webp");
   assert.equal(universalGame.script.count, 3);
   assert.equal(universalGame.script.freeCount, 2);
   assert.equal(universalGame.script.keyCount, 1);
@@ -641,21 +642,32 @@ test("place-to-universe cache persistence saves and restores mappings", async ()
 
 test("resolveScriptThumbnail uses CDN fallback for /images/no-script.webp and uploads others with process: true", async () => {
   const fallback = await resolveScriptThumbnail("/images/no-script.webp");
-  assert.equal(fallback, "https://cdn.kocakz.me/images/no-script.webp");
+  assert.equal(fallback.url, "https://cdn.kocakz.me/images/no-script.webp");
+  assert.equal(fallback.original, null);
+  assert.equal(fallback.scriptblox, null);
 
   const empty = await resolveScriptThumbnail("");
-  assert.equal(empty, "https://cdn.kocakz.me/images/no-script.webp");
+  assert.equal(empty.url, "https://cdn.kocakz.me/images/no-script.webp");
 
   const nullThumb = await resolveScriptThumbnail(null);
-  assert.equal(nullThumb, "https://cdn.kocakz.me/images/no-script.webp");
+  assert.equal(nullThumb.url, "https://cdn.kocakz.me/images/no-script.webp");
+});
+
+test("resolveScriptThumbnail converts /images/sb/ to /images/script/ for scriptblox property", async () => {
+  const res = await resolveScriptThumbnail("https://scriptblox.com/images/sb/-1-1790125848725.png");
+  assert.equal(typeof res, "object");
+  assert.equal(res.original, "https://scriptblox.com/images/sb/-1-1790125848725.png");
+  assert.equal(res.scriptblox, "https://scriptblox.com/images/script/-1-1790125848725.png");
+  assert.ok(typeof res.url === "string");
 });
 
 test("resolveAvatarThumbnail uses CDN fallback for /images/user-default.webp and uploads others with process: false", async () => {
   const fallback = await resolveAvatarThumbnail("/images/user-default.webp");
-  assert.equal(fallback, "https://cdn.kocakz.me/images/no-profile.webp");
+  assert.equal(fallback.url, "https://cdn.kocakz.me/images/no-profile.webp");
+  assert.equal(fallback.original, null);
 
   const empty = await resolveAvatarThumbnail(null);
-  assert.equal(empty, "https://cdn.kocakz.me/images/no-profile.webp");
+  assert.equal(empty.url, "https://cdn.kocakz.me/images/no-profile.webp");
 });
 
 test("resolveGameThumbnail checks candidate reachability via HEAD and falls back to no-game.webp when all fail", async () => {
@@ -663,18 +675,22 @@ test("resolveGameThumbnail checks candidate reachability via HEAD and falls back
     "https://example.com/non-existent-image-12345.png",
     "https://example.com/another-broken-404.jpg",
   ]);
-  assert.equal(allFail, "https://cdn.kocakz.me/images/no-game.webp");
+  assert.equal(allFail.url, "https://cdn.kocakz.me/images/no-game.webp");
+  assert.equal(allFail.original, null);
 
   const emptyList = await resolveGameThumbnail([]);
-  assert.equal(emptyList, "https://cdn.kocakz.me/images/no-game.webp");
+  assert.equal(emptyList.url, "https://cdn.kocakz.me/images/no-game.webp");
 });
 
 test("resolveGameThumbnail uploads reachable URL and returns full CDN URL", async () => {
-  const cdnUrl = await resolveGameThumbnail([
+  const res = await resolveGameThumbnail([
     "https://tr.rbxcdn.com/180DAY-be85b5af1040324de15123ab4208cf84/150/150/Image/Png/noFilter",
   ]);
-  assert.ok(typeof cdnUrl === "string");
-  assert.match(cdnUrl, /^https:\/\/cdn\.kocakz\.me\/images\/.+\.webp$/);
+  assert.ok(typeof res === "object");
+  assert.ok(typeof res.url === "string");
+  assert.match(res.url, /^https:\/\/cdn\.kocakz\.me\/images\/.+\.webp$/);
+  assert.ok(typeof res.original === "string");
 });
+
 
 

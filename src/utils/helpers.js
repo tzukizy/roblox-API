@@ -160,14 +160,25 @@ export async function buildUnifiedGame({
   });
 
   let resolvedThumbnail = thumbnail;
-  if (!resolvedThumbnail || typeof resolvedThumbnail !== "string") {
-    const candidateUrls = buildGameThumbnails({
-      robloxThumb: roblox?.iconUrl || rolimons?.robloxIcon,
-      rolimonsThumb: rolimons?.rolimonsThumb,
-      scriptbloxThumb: scriptblox?.game?.imageUrl,
-      fallback: fallback || CDN_CONFIG?.fallbacks?.game || "https://cdn.kocakz.me/images/no-game.webp",
-    });
-    resolvedThumbnail = await resolveGameThumbnail(candidateUrls);
+  if (
+    !resolvedThumbnail ||
+    typeof resolvedThumbnail !== "object" ||
+    !resolvedThumbnail.url
+  ) {
+    if (typeof resolvedThumbnail === "string") {
+      resolvedThumbnail = { url: resolvedThumbnail, original: null };
+    } else {
+      const candidateUrls = buildGameThumbnails({
+        robloxThumb: roblox?.iconUrl || rolimons?.robloxIcon,
+        rolimonsThumb: rolimons?.rolimonsThumb,
+        scriptbloxThumb: scriptblox?.game?.imageUrl,
+        fallback:
+          fallback ||
+          CDN_CONFIG?.fallbacks?.game ||
+          "https://cdn.kocakz.me/images/no-game.webp",
+      });
+      resolvedThumbnail = await resolveGameThumbnail(candidateUrls);
+    }
   }
 
   const playing =

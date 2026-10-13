@@ -201,15 +201,30 @@ export async function resolveCdnImage(rawUrl, { process = false, timeoutMs = 150
  * Resolves a game thumbnail from an ordered list of candidate URLs.
  * Checks reachability via HTTP HEAD.
  * Uploads the first reachable candidate with process: false.
- * Returns https://cdn.kocakz.me/images/[hash].webp or falls back to no-game.webp.
+ * Returns { url: "https://cdn.kocakz.me/images/[hash].webp", original: "candidate" }
+ * or falls back to { url: "https://cdn.kocakz.me/images/no-game.webp", original: null }.
  *
- * @param {string[]|string} candidateUrls
- * @returns {Promise<string>}
+ * @param {string[]|string|Object} candidateUrls
+ * @returns {Promise<{ url: string, original: string|null }>}
  */
 export async function resolveGameThumbnail(candidateUrls) {
+  if (
+    candidateUrls &&
+    typeof candidateUrls === "object" &&
+    !Array.isArray(candidateUrls) &&
+    typeof candidateUrls.url === "string"
+  ) {
+    return {
+      url: candidateUrls.url,
+      original: candidateUrls.original ?? null,
+    };
+  }
+
   loadCdnCache();
 
-  const candidates = (Array.isArray(candidateUrls) ? candidateUrls : [candidateUrls])
+  const rawList = Array.isArray(candidateUrls) ? candidateUrls : [candidateUrls];
+  const candidates = rawList
+    .map((u) => (typeof u === "object" && u ? (u.original || u.url) : u))
     .filter((u) => u && typeof u === "string")
     .map((u) => u.trim())
     .filter((u) => {
@@ -234,7 +249,10 @@ export async function resolveGameThumbnail(candidateUrls) {
     }
     const cacheKey = `raw::${normalized}`;
     if (cdnCache.has(cacheKey)) {
-      return cdnCache.get(cacheKey);
+      return {
+        url: cdnCache.get(cacheKey),
+        original: candidate,
+      };
     }
   }
 
@@ -249,28 +267,52 @@ export async function resolveGameThumbnail(candidateUrls) {
     if (reachable) {
       const cdnUrl = await resolveCdnImage(target, { process: false });
       if (cdnUrl) {
-        return cdnUrl;
+        return {
+          url: cdnUrl,
+          original: candidate,
+        };
       }
     }
   }
 
   // 3. Fallback when all candidates error
-  return CDN_CONFIG.fallbacks.game;
+  return {
+    url: CDN_CONFIG.fallbacks.game,
+    original: null,
+  };
 }
 
 /**
  * Resolves a script thumbnail.
  * If url includes "no-script" (any extension) or is missing, returns CDN fallback.
- * Otherwise uploads with process: true.
+ * Replaces `/sb/` with `/script/` for the `scriptblox` field.
+ * Uploads `original` to CDN with process: true.
+ * Returns { url, original, scriptblox }.
  *
- * @param {string|null} imageUrl
- * @returns {Promise<string>}
+ * @param {string|Object|null} imageUrl
+ * @returns {Promise<{ url: string, original: string|null, scriptblox: string|null }>}
  */
 export async function resolveScriptThumbnail(imageUrl) {
+  if (
+    imageUrl &&
+    typeof imageUrl === "object" &&
+    typeof imageUrl.url === "string"
+  ) {
+    return {
+      url: imageUrl.url,
+      original: imageUrl.original ?? null,
+      scriptblox: imageUrl.scriptblox ?? null,
+    };
+  }
+
   loadCdnCache();
 
   if (!imageUrl || typeof imageUrl !== "string") {
-    return CDN_CONFIG.fallbacks.script;
+    return {
+      url: CDN_CONFIG.fallbacks.script,
+      original: null,
+      scriptblox: null,
+    };
   }
 
   const trimmed = imageUrl.trim();
@@ -279,33 +321,61 @@ export async function resolveScriptThumbnail(imageUrl) {
     trimmed.includes("no-script") ||
     trimmed.includes("/brand/kocakz-logo.png")
   ) {
-    return CDN_CONFIG.fallbacks.script;
+    return {
+      url: CDN_CONFIG.fallbacks.script,
+      original: null,
+      scriptblox: null,
+    };
   }
 
-  const absoluteUrl = resolveScriptImageUrl(trimmed);
-  const cacheKey = `script::${absoluteUrl}`;
+  const original = resolveScriptImageUrl(trimmed);
+  const scriptblox = original.replace(/\/images\/sb\//, "/images/script/");
+  const cacheKey = `script::${original}`;
+
   if (cdnCache.has(cacheKey)) {
-    return cdnCache.get(cacheKey);
+    return {
+      url: cdnCache.get(cacheKey),
+      original,
+      scriptblox,
+    };
   }
 
-  const cdnUrl = await resolveCdnImage(absoluteUrl, { process: true });
-  return cdnUrl || CDN_CONFIG.fallbacks.script;
+  const cdnUrl = await resolveCdnImage(original, { process: true });
+  return {
+    url: cdnUrl || CDN_CONFIG.fallbacks.script,
+    original,
+    scriptblox,
+  };
 }
 
 /**
- * Resolves an avatar image.
- * If url includes "user-default" (any extension: .png, .webp) or "no-profile" or is missing,
- * returns CDN fallback (https://cdn.kocakz.me/images/no-profile.webp).
+ * Resolves an avatar / profile image or logo.
+ * If url includes "user-default" or "no-profile" or is missing, returns CDN fallback.
  * Otherwise uploads with process: false (160x160 WebP 90).
+ * Returns { url, original }.
  *
- * @param {string|null} avatarUrl
- * @returns {Promise<string>}
+ * @param {string|Object|null} avatarUrl
+ * @returns {Promise<{ url: string, original: string|null }>}
  */
 export async function resolveAvatarThumbnail(avatarUrl) {
+  if (
+    avatarUrl &&
+    typeof avatarUrl === "object" &&
+    typeof avatarUrl.url === "string"
+  ) {
+    return {
+      url: avatarUrl.url,
+      original: avatarUrl.original ?? null,
+    };
+  }
+
   loadCdnCache();
 
   if (!avatarUrl || typeof avatarUrl !== "string") {
-    return CDN_CONFIG.fallbacks.profile;
+    return {
+      url: CDN_CONFIG.fallbacks.profile,
+      original: null,
+    };
   }
 
   const trimmed = avatarUrl.trim();
@@ -315,15 +385,25 @@ export async function resolveAvatarThumbnail(avatarUrl) {
     trimmed.includes("no-profile") ||
     trimmed.includes("/brand/kocakz-logo.png")
   ) {
-    return CDN_CONFIG.fallbacks.profile;
+    return {
+      url: CDN_CONFIG.fallbacks.profile,
+      original: null,
+    };
   }
 
-  const absoluteUrl = resolveScriptImageUrl(trimmed);
-  const cacheKey = `raw::${absoluteUrl}`;
+  const original = resolveScriptImageUrl(trimmed);
+  const cacheKey = `raw::${original}`;
+
   if (cdnCache.has(cacheKey)) {
-    return cdnCache.get(cacheKey);
+    return {
+      url: cdnCache.get(cacheKey),
+      original,
+    };
   }
 
-  const cdnUrl = await resolveCdnImage(absoluteUrl, { process: false });
-  return cdnUrl || CDN_CONFIG.fallbacks.profile;
+  const cdnUrl = await resolveCdnImage(original, { process: false });
+  return {
+    url: cdnUrl || CDN_CONFIG.fallbacks.profile,
+    original,
+  };
 }
