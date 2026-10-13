@@ -36,6 +36,7 @@ try {
 export const PATHS = {
   data: DATA_DIR,
   cache: CACHE_DIR,
+  cdnCache: path.resolve(CACHE_DIR, "cdn-images.json"),
   home: path.resolve(DATA_DIR, "home"),
   homeLatest: path.resolve(DATA_DIR, "home", "latest"),
   script: path.resolve(DATA_DIR, "script"),
@@ -47,6 +48,16 @@ export const PATHS = {
   keylessPages: path.resolve(DATA_DIR, "keyless", "pages"),
   universal: path.resolve(DATA_DIR, "universal"),
   executor: path.resolve(DATA_DIR, "executor"),
+};
+
+export const CDN_CONFIG = {
+  baseUrl: (process.env.CDN_URL || "https://cdn.kocakz.me").replace(/\/+$/, ""),
+  apiKey: process.env.CDN_API_KEY || "",
+  fallbacks: {
+    game: `${(process.env.CDN_URL || "https://cdn.kocakz.me").replace(/\/+$/, "")}/images/no-game.webp`,
+    script: `${(process.env.CDN_URL || "https://cdn.kocakz.me").replace(/\/+$/, "")}/images/no-script.webp`,
+    profile: `${(process.env.CDN_URL || "https://cdn.kocakz.me").replace(/\/+$/, "")}/images/no-profile.webp`,
+  },
 };
 
 export const API_URLS = {

@@ -1,6 +1,6 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { PATHS, SCRAPE_LIMITS } from "./config.js";
+import { PATHS, SCRAPE_LIMITS, CDN_CONFIG } from "./config.js";
 import {
   ensureDir,
   writeJsonFile,
@@ -9,6 +9,13 @@ import {
   slugToHash,
   paginateGames,
 } from "./utils/helpers.js";
+import {
+  resolveScriptThumbnail,
+  resolveAvatarThumbnail,
+  resolveGameThumbnail,
+  saveCdnCache,
+  loadCdnCache,
+} from "./utils/cdn.js";
 import { scrapeRolimonsGameList } from "./scrapers/rolimons.js";
 import {
   fetchRobloxPlaceIcons,
@@ -208,19 +215,75 @@ export async function runScraper() {
         }
       }
 
+      // 1. Resolve script thumbnail through CDN (process: true)
+      const cdnImage = await resolveScriptThumbnail(base.image);
+
+      // 2. Resolve owner avatar through CDN (process: false)
+      let resolvedOwner = base.owner ? { ...base.owner } : null;
+      if (resolvedOwner) {
+        resolvedOwner.profilePicture = await resolveAvatarThumbnail(
+          resolvedOwner.profilePicture,
+        );
+      }
+
+      // 3. Resolve game image if present (process: false)
+      let resolvedGameImage = base.game?.imageUrl || "";
+      if (resolvedGameImage) {
+        resolvedGameImage = await resolveGameThumbnail([resolvedGameImage]);
+      }
+
+      // 4. Resolve supported games images if present
+      const rawSupported = base.supportedGames || supportedGames || [];
+      const resolvedSupportedGames = Array.isArray(rawSupported)
+        ? await Promise.all(
+            rawSupported.map(async (sg) => {
+              if (sg.imageUrl) {
+                return {
+                  ...sg,
+                  imageUrl: await resolveGameThumbnail([sg.imageUrl]),
+                };
+              }
+              return sg;
+            }),
+          )
+        : rawSupported;
+
+      // 5. Resolve comment avatars
+      const rawComments =
+        Array.isArray(base.comments) && base.comments.length > 0
+          ? base.comments
+          : comments;
+      const resolvedComments = Array.isArray(rawComments)
+        ? await Promise.all(
+            rawComments.map(async (c) => {
+              if (c.commentBy?.profilePicture) {
+                return {
+                  ...c,
+                  commentBy: {
+                    ...c.commentBy,
+                    profilePicture: await resolveAvatarThumbnail(
+                      c.commentBy.profilePicture,
+                    ),
+                  },
+                };
+              }
+              return c;
+            }),
+          )
+        : rawComments;
+
       const fullScript = {
         ...base,
+        image: cdnImage,
+        owner: resolvedOwner,
         isUniversal: Boolean(base.isUniversal || finalPlaceId === 0),
         isHub: Boolean(base.isHub),
-        supportedGames: base.supportedGames || supportedGames,
+        supportedGames: resolvedSupportedGames,
         changelog:
           Array.isArray(base.changelog) && base.changelog.length > 0
             ? base.changelog
             : changelog,
-        comments:
-          Array.isArray(base.comments) && base.comments.length > 0
-            ? base.comments
-            : comments,
+        comments: resolvedComments,
         game: {
           ...(scriptSummary.game || {}),
           ...(detailed?.game || {}),
@@ -229,7 +292,7 @@ export async function runScraper() {
             (finalPlaceId === 0
               ? "Universal Scripts"
               : `Game #${finalPlaceId}`),
-          imageUrl: base.game?.imageUrl || "",
+          imageUrl: resolvedGameImage,
           gameId: finalPlaceId,
           placeId: finalPlaceId,
         },
@@ -243,8 +306,20 @@ export async function runScraper() {
       );
     }
 
-    scriptDetailsCache.set(slug, scriptSummary);
-    return scriptSummary;
+    const fallbackSummary = {
+      ...scriptSummary,
+      image: await resolveScriptThumbnail(scriptSummary.image),
+      owner: scriptSummary.owner
+        ? {
+            ...scriptSummary.owner,
+            profilePicture: await resolveAvatarThumbnail(
+              scriptSummary.owner.profilePicture,
+            ),
+          }
+        : scriptSummary.owner,
+    };
+    scriptDetailsCache.set(slug, fallbackSummary);
+    return fallbackSummary;
   }
 
   // ----------------------------------------------------
@@ -494,7 +569,7 @@ export async function runScraper() {
         }
 
         // Build the UnifiedGame object
-        const unifiedGame = buildUnifiedGame({
+        const unifiedGame = await buildUnifiedGame({
           rolimons: {
             placeId,
             name: rolimonInfo?.name,
@@ -697,7 +772,7 @@ export async function runScraper() {
   });
 
   // Construct Universal as a Game entity conforming to Unified Game Schema
-  const universalGame = buildUnifiedGame({
+  const universalGame = await buildUnifiedGame({
     rolimons: {
       placeId: 0,
       name: "Universal Scripts",
@@ -732,7 +807,7 @@ export async function runScraper() {
       keyCount: universalScripts.filter((s) => s.key).length,
       verifiedCount: universalScripts.filter((s) => s.verified).length,
     },
-    fallback: "/brand/kocakz-logo.png",
+    thumbnail: CDN_CONFIG.fallbacks.game,
   });
 
   // Write /data/game/universal.json (acts like a game)
@@ -843,6 +918,7 @@ export async function runScraper() {
           if (full?.supportedGames) item.supportedGames = full.supportedGames;
 
           // Enrich with full script properties if available
+          if (full?.image) item.image = full.image;
           if (full?.script) item.script = full.script;
           if (full?.features) item.features = full.features;
           if (full?.tags) item.tags = full.tags;
@@ -850,6 +926,18 @@ export async function runScraper() {
           if (full?.keyLink) item.keyLink = full.keyLink;
           if (full?.owner)
             item.owner = { ...(item.owner || {}), ...(full.owner || {}) };
+        }
+      }
+
+      // Resolve creator profile pictures through CDN
+      const creatorsBoard = lbData.leaderboard?.boards?.creators?.executes;
+      if (Array.isArray(creatorsBoard)) {
+        for (const creator of creatorsBoard) {
+          if (creator.profilePicture) {
+            creator.profilePicture = await resolveAvatarThumbnail(
+              creator.profilePicture,
+            );
+          }
         }
       }
 
@@ -871,7 +959,19 @@ export async function runScraper() {
   );
 
   // Executors
-  const executors = await fetchExecutors();
+  const rawExecutors = await fetchExecutors();
+  const executors = await Promise.all(
+    rawExecutors.map(async (item) => {
+      const copy = { ...item };
+      if (copy.thumbnail) {
+        copy.thumbnail = await resolveScriptThumbnail(copy.thumbnail);
+      }
+      if (copy.logo) {
+        copy.logo = await resolveAvatarThumbnail(copy.logo);
+      }
+      return copy;
+    }),
+  );
   await writeJsonFile(path.join(PATHS.executor, "executors.json"), executors);
   for (const item of executors) {
     const rawSlug = (item.slug || item.name || item.id || "")
@@ -936,6 +1036,7 @@ export async function runScraper() {
 
   await writeJsonFile(path.join(PATHS.data, "manifest.json"), manifest);
   savePlaceToUniverseCache();
+  saveCdnCache();
 
   console.log("\n==================================================");
   console.log("Data Pipeline Complete!");

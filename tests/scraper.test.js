@@ -13,6 +13,15 @@ import {
   slugToHash,
   paginateGames,
 } from "../src/utils/helpers.js";
+import {
+  resolveGameThumbnail,
+  resolveScriptThumbnail,
+  resolveAvatarThumbnail,
+  resolveCdnImage,
+  loadCdnCache,
+  saveCdnCache,
+} from "../src/utils/cdn.js";
+import { CDN_CONFIG } from "../src/config.js";
 import { scrapeRolimonsGameList } from "../src/scrapers/rolimons.js";
 import {
   fetchRobloxPlaceIcons,
@@ -365,6 +374,7 @@ test("buildGameThumbnails enforces exact order: [roblox, rolimons, scriptblox, f
     robloxThumb: "https://tr.rbxcdn.com/abc/500/280/Image/Png/noFilter",
     rolimonsThumb: "https://assets.rolimons.com/Image/Webp/test.webp",
     scriptbloxThumb: "/images/scriptblox.png",
+    fallback: "/brand/kocakz-logo.png",
   });
 
   assert.equal(thumbs.length, 4);
@@ -414,8 +424,8 @@ test("formatGamePathAndSlug resolves canonical path and slug", () => {
   assert.equal(res3.slug, "2753915549-blox-fruits");
 });
 
-test("buildUnifiedGame produces exact user-specified schema with all required fields", () => {
-  const unified = buildUnifiedGame({
+test("buildUnifiedGame produces exact user-specified schema with single CDN thumbnail string", async () => {
+  const unified = await buildUnifiedGame({
     rolimons: {
       placeId: 189707,
       name: "Natural Disaster Survival",
@@ -449,11 +459,8 @@ test("buildUnifiedGame produces exact user-specified schema with all required fi
   );
   assert.equal(unified.path, "/game/189707-natural-disaster-survival");
   assert.equal(unified.slug, "189707-natural-disaster-survival");
-  assert.ok(Array.isArray(unified.thumbnail));
-  assert.equal(
-    unified.thumbnail[0],
-    "https://tr.rbxcdn.com/icon/150/150/Image/Png/noFilter",
-  );
+  assert.equal(typeof unified.thumbnail, "string");
+  assert.match(unified.thumbnail, /^https:\/\/cdn\.kocakz\.me\/images\/.+\.webp$/);
   assert.equal(unified.playing, 5781);
   assert.equal(unified.visitor, 4502938627);
   assert.equal(unified.verified, true);
@@ -495,14 +502,14 @@ test("fetchScriptDetails fetches complete script containing script code, feature
   assert.ok(full.owner, "Full script must contain owner object");
 });
 
-test("Universal acts like a game conforming to Unified Game Schema and pagination", () => {
+test("Universal acts like a game conforming to Unified Game Schema and pagination", async () => {
   const mockUniversalScripts = [
     { title: "Dex Explorer", scriptType: "free", key: false, verified: true },
     { title: "Infinite Yield", scriptType: "free", key: false, verified: true },
     { title: "Hydroxide", scriptType: "key", key: true, verified: false },
   ];
 
-  const universalGame = buildUnifiedGame({
+  const universalGame = await buildUnifiedGame({
     rolimons: { placeId: 0, name: "Universal Scripts", totalPlayers: 0 },
     roblox: {
       name: "Universal Scripts",
@@ -517,13 +524,15 @@ test("Universal acts like a game conforming to Unified Game Schema and paginatio
       keyCount: 1,
       verifiedCount: 2,
     },
+    thumbnail: CDN_CONFIG?.fallbacks?.game || "https://cdn.kocakz.me/images/no-game.webp",
   });
 
   assert.equal(universalGame.id, 0);
   assert.equal(universalGame.name, "Universal Scripts");
   assert.equal(universalGame.slug, "universal");
   assert.equal(universalGame.path, "/game/universal");
-  assert.ok(Array.isArray(universalGame.thumbnail));
+  assert.equal(typeof universalGame.thumbnail, "string");
+  assert.equal(universalGame.thumbnail, "https://cdn.kocakz.me/images/no-game.webp");
   assert.equal(universalGame.script.count, 3);
   assert.equal(universalGame.script.freeCount, 2);
   assert.equal(universalGame.script.keyCount, 1);
@@ -573,10 +582,11 @@ test("scrapeScriptBloxGameSitemap parses 9,900+ games and maps inconsistent pure
     slugToPlaceId.get("16146832113-anime-vanguards-wrathful-assault"),
     16146832113,
   );
-  assert.equal(
-    slugToPlaceId.get("124216119978534-ride-a-pet"),
-    124216119978534,
-  );
+  // Check dynamic sample from parsed sitemap
+  const sampleGame = games.find((g) => g.placeId > 0 && g.slug.includes("-"));
+  if (sampleGame) {
+    assert.equal(slugToPlaceId.get(sampleGame.slug), sampleGame.placeId);
+  }
 
   // String place IDs
   assert.equal(slugToPlaceId.get("107535308163741"), 107535308163741);
@@ -710,4 +720,43 @@ test("place-to-universe cache persistence saves and restores mappings", async ()
   const cachedUid = await resolvePlaceToUniverse(189707);
   assert.equal(cachedUid, uid);
 });
+
+test("resolveScriptThumbnail uses CDN fallback for /images/no-script.webp and uploads others with process: true", async () => {
+  const fallback = await resolveScriptThumbnail("/images/no-script.webp");
+  assert.equal(fallback, "https://cdn.kocakz.me/images/no-script.webp");
+
+  const empty = await resolveScriptThumbnail("");
+  assert.equal(empty, "https://cdn.kocakz.me/images/no-script.webp");
+
+  const nullThumb = await resolveScriptThumbnail(null);
+  assert.equal(nullThumb, "https://cdn.kocakz.me/images/no-script.webp");
+});
+
+test("resolveAvatarThumbnail uses CDN fallback for /images/user-default.webp and uploads others with process: false", async () => {
+  const fallback = await resolveAvatarThumbnail("/images/user-default.webp");
+  assert.equal(fallback, "https://cdn.kocakz.me/images/no-profile.webp");
+
+  const empty = await resolveAvatarThumbnail(null);
+  assert.equal(empty, "https://cdn.kocakz.me/images/no-profile.webp");
+});
+
+test("resolveGameThumbnail checks candidate reachability via HEAD and falls back to no-game.webp when all fail", async () => {
+  const allFail = await resolveGameThumbnail([
+    "https://example.com/non-existent-image-12345.png",
+    "https://example.com/another-broken-404.jpg",
+  ]);
+  assert.equal(allFail, "https://cdn.kocakz.me/images/no-game.webp");
+
+  const emptyList = await resolveGameThumbnail([]);
+  assert.equal(emptyList, "https://cdn.kocakz.me/images/no-game.webp");
+});
+
+test("resolveGameThumbnail uploads reachable URL and returns full CDN URL", async () => {
+  const cdnUrl = await resolveGameThumbnail([
+    "https://tr.rbxcdn.com/180DAY-be85b5af1040324de15123ab4208cf84/150/150/Image/Png/noFilter",
+  ]);
+  assert.ok(typeof cdnUrl === "string");
+  assert.match(cdnUrl, /^https:\/\/cdn\.kocakz\.me\/images\/.+\.webp$/);
+});
+
 

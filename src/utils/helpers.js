@@ -1,7 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createHash } from "node:crypto";
-import { USER_AGENTS } from "../config.js";
+import { USER_AGENTS, CDN_CONFIG } from "../config.js";
+import { resolveGameThumbnail } from "./cdn.js";
 
 /**
  * Normalizes a Roblox CDN image URL to 150x150 resolution.
@@ -26,14 +27,14 @@ export function normalizeRobloxThumb(url) {
  * @param {string|null} [params.robloxThumb]
  * @param {string|null} [params.rolimonsThumb]
  * @param {string|null} [params.scriptbloxThumb]
- * @param {string} [params.fallback="/brand/kocakz-logo.png"]
+ * @param {string} [params.fallback]
  * @returns {string[]}
  */
 export function buildGameThumbnails({
   robloxThumb,
   rolimonsThumb,
   scriptbloxThumb,
-  fallback = "/brand/kocakz-logo.png",
+  fallback = CDN_CONFIG?.fallbacks?.game || "https://cdn.kocakz.me/images/no-game.webp",
 } = {}) {
   const list = [];
 
@@ -155,14 +156,16 @@ export function formatGamePathAndSlug({
  * @param {Object} [params.rolimons]
  * @param {Object|null} [params.roblox]
  * @param {Object|null} [params.scriptblox]
+ * @param {string|null} [params.thumbnail]
  * @param {string} [params.fallback]
- * @returns {Object}
+ * @returns {Promise<Object>}
  */
-export function buildUnifiedGame({
+export async function buildUnifiedGame({
   rolimons = {},
   roblox = null,
   scriptblox = null,
-  fallback = "/brand/kocakz-logo.png",
+  thumbnail = null,
+  fallback = null,
 }) {
   const placeId = Number(
     rolimons.placeId || roblox?.placeId || scriptblox?.game?.gameId || 0,
@@ -181,12 +184,16 @@ export function buildUnifiedGame({
     canonicalUrlPath: roblox?.canonicalUrlPath,
   });
 
-  const thumbnail = buildGameThumbnails({
-    robloxThumb: roblox?.iconUrl || rolimons?.robloxIcon,
-    rolimonsThumb: rolimons?.rolimonsThumb,
-    scriptbloxThumb: scriptblox?.game?.imageUrl,
-    fallback,
-  });
+  let resolvedThumbnail = thumbnail;
+  if (!resolvedThumbnail || typeof resolvedThumbnail !== "string") {
+    const candidateUrls = buildGameThumbnails({
+      robloxThumb: roblox?.iconUrl || rolimons?.robloxIcon,
+      rolimonsThumb: rolimons?.rolimonsThumb,
+      scriptbloxThumb: scriptblox?.game?.imageUrl,
+      fallback: fallback || CDN_CONFIG?.fallbacks?.game || "https://cdn.kocakz.me/images/no-game.webp",
+    });
+    resolvedThumbnail = await resolveGameThumbnail(candidateUrls);
+  }
 
   const playing =
     typeof rolimons?.totalPlayers === "number" && rolimons.totalPlayers >= 0
@@ -217,7 +224,7 @@ export function buildUnifiedGame({
     desc,
     path,
     slug,
-    thumbnail,
+    thumbnail: resolvedThumbnail,
     playing,
     visitor,
     verified,
