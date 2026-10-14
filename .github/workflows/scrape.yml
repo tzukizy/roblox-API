@@ -11,6 +11,11 @@ on:
         required: false
         type: boolean
         default: false
+      clear_cdn_cache:
+        description: 'Clear CDN image cache (keeps place-to-universe)'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -42,6 +47,10 @@ jobs:
           key: scraper-cache-${{ runner.os }}-${{ github.run_id }}
           restore-keys: |
             scraper-cache-${{ runner.os }}-
+
+      - name: Clear CDN cache on demand
+        if: ${{ inputs.clear_cdn_cache }}
+        run: rm -f .cache/cdn-images.json
 
       - name: Install dependencies
         run: |
