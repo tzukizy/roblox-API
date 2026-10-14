@@ -2,8 +2,8 @@ name: Scrape Roblox & ScriptBlox Data
 
 on:
   schedule:
-    # Run every 3 days at 00:00 UTC
-    - cron: '0 0 */3 * *'
+    # Run daily at 00:00 UTC
+    - cron: '0 0 * * *'
   workflow_dispatch:
     inputs:
       force_push:
@@ -86,3 +86,18 @@ jobs:
             git rebase -X ours origin/main
             git push origin main
           fi
+
+      - name: Purge jsDelivr CDN edge cache
+        run: |
+          echo "Purging jsDelivr edge cache for main dataset index files..."
+          curl -s "https://purge.jsdelivr.net/gh/tzukizy/roblox-API@main/data/home/trending.json" || true
+          curl -s "https://purge.jsdelivr.net/gh/tzukizy/roblox-API@main/data/home/latest.json" || true
+          curl -s "https://purge.jsdelivr.net/gh/tzukizy/roblox-API@main/data/home/topscript.json" || true
+          curl -s "https://purge.jsdelivr.net/gh/tzukizy/roblox-API@main/data/home/latest/1.json" || true
+          curl -s "https://purge.jsdelivr.net/gh/tzukizy/roblox-API@main/data/trending/day.json" || true
+          curl -s "https://purge.jsdelivr.net/gh/tzukizy/roblox-API@main/data/trending/week.json" || true
+          curl -s "https://purge.jsdelivr.net/gh/tzukizy/roblox-API@main/data/trending/month.json" || true
+          curl -s "https://purge.jsdelivr.net/gh/tzukizy/roblox-API@main/data/trending/all.json" || true
+          curl -s "https://purge.jsdelivr.net/gh/tzukizy/roblox-API@main/data/keyless/scripts.json" || true
+          curl -s "https://purge.jsdelivr.net/gh/tzukizy/roblox-API@main/data/game/games.json" || true
+          echo "jsDelivr cache purge requests dispatched."
