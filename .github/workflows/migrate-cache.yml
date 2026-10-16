@@ -1,0 +1,52 @@
+name: Migrate Cache CDN URLs to Media
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Run migration without saving cache back'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scraper-data
+  cancel-in-progress: false
+
+jobs:
+  migrate-cache:
+    name: Migrate CDN Image Cache URLs to Media
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Restore Scraper Cache
+        uses: actions/cache/restore@v4
+        id: restore-cache
+        with:
+          path: .cache
+          key: scraper-cache-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            scraper-cache-${{ runner.os }}-
+
+      - name: Run Cache Migration
+        run: node src/utils/migrate-cache.js
+
+      - name: Save Updated Scraper Cache
+        if: ${{ !inputs.dry_run }}
+        uses: actions/cache/save@v4
+        with:
+          path: .cache
+          key: scraper-cache-${{ runner.os }}-${{ github.run_id }}

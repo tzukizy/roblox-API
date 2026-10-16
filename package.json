@@ -9,6 +9,7 @@
     "scrape": "node src/index.js",
     "scrape-test": "node src/test-scrape.js",
     "scrape:test": "node src/test-scrape.js",
+    "migrate-cache": "node src/utils/migrate-cache.js",
     "test": "node --test tests/**/*.test.js"
   },
   "keywords": [

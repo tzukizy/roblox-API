@@ -34,7 +34,7 @@ export function buildGameThumbnails({
   robloxThumb,
   rolimonsThumb,
   scriptbloxThumb,
-  fallback = CDN_CONFIG?.fallbacks?.game || "https://cdn.kocakz.me/images/no-game.webp",
+  fallback = CDN_CONFIG?.fallbacks?.game || "https://media.kocakz.me/no-game.webp",
 } = {}) {
   const list = [];
 
@@ -175,7 +175,7 @@ export async function buildUnifiedGame({
         fallback:
           fallback ||
           CDN_CONFIG?.fallbacks?.game ||
-          "https://cdn.kocakz.me/images/no-game.webp",
+          "https://media.kocakz.me/no-game.webp",
       });
       resolvedThumbnail = await resolveGameThumbnail(candidateUrls);
     }

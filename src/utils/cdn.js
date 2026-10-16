@@ -20,9 +20,14 @@ export function loadCdnCache() {
       const raw = fs.readFileSync(PATHS.cdnCache, "utf-8");
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === "object") {
+        const mediaUrl = CDN_CONFIG.mediaUrl || "https://media.kocakz.me";
         for (const [key, value] of Object.entries(parsed)) {
           if (typeof key === "string" && typeof value === "string") {
-            cdnCache.set(key, value);
+            const normalized = value
+              .replace(/^https?:\/\/cdn\.kocakz\.me\/images\//, `${mediaUrl}/`)
+              .replace(/^https?:\/\/cdn\.kocakz\.me\//, `${mediaUrl}/`)
+              .replace(/^https?:\/\/media\.kocakz\.me\/images\//, `${mediaUrl}/`);
+            cdnCache.set(key, normalized);
           }
         }
       }
@@ -114,7 +119,7 @@ export async function isUrlReachable(url, timeoutMs = 3500) {
  * Resolves an image through the KocakZ CDN.
  * 1. Checks memory & disk cache.
  * 2. Ingests via POST /api/image on cache miss.
- * 3. Returns full public CDN URL (https://cdn.kocakz.me/images/[hash].webp).
+ * 3. Returns full public CDN URL (https://media.kocakz.me/[hash].webp).
  *
  * @param {string} rawUrl
  * @param {Object} [options]
@@ -202,8 +207,8 @@ export async function resolveCdnImage(rawUrl, { process = false, timeoutMs = 150
  * Resolves a game thumbnail from an ordered list of candidate URLs.
  * Checks reachability via HTTP HEAD.
  * Uploads the first reachable candidate with process: false.
- * Returns { url: "https://cdn.kocakz.me/images/[hash].webp", original: "candidate" }
- * or falls back to { url: "https://cdn.kocakz.me/images/no-game.webp", original: null }.
+ * Returns { url: "https://media.kocakz.me/[hash].webp", original: "candidate" }
+ * or falls back to { url: "https://media.kocakz.me/no-game.webp", original: null }.
  *
  * @param {string[]|string|Object} candidateUrls
  * @returns {Promise<{ url: string, original: string|null }>}

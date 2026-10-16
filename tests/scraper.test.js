@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import {
   getScriptGameSlug,
   resolveScriptImageUrl,
@@ -19,7 +21,7 @@ import {
   loadCdnCache,
   saveCdnCache,
 } from "../src/utils/cdn.js";
-import { CDN_CONFIG } from "../src/config.js";
+import { CDN_CONFIG, ROOT_DIR } from "../src/config.js";
 import { scrapeRolimonsGameList } from "../src/scrapers/rolimons.js";
 import {
   fetchRobloxPlaceIcons,
@@ -434,7 +436,7 @@ test("buildUnifiedGame produces exact user-specified schema with single CDN thum
   assert.equal(unified.path, "/game/189707-natural-disaster-survival");
   assert.equal(unified.slug, "189707-natural-disaster-survival");
   assert.equal(typeof unified.thumbnail, "object");
-  assert.match(unified.thumbnail.url, /^https:\/\/cdn\.kocakz\.me\/images\/.+\.webp$/);
+  assert.match(unified.thumbnail.url, /^https:\/\/media\.kocakz\.me\/.+\.webp$/);
   assert.ok(unified.thumbnail.original);
   assert.equal(unified.playing, 5781);
   assert.equal(unified.visitor, 4502938627);
@@ -688,8 +690,32 @@ test("resolveGameThumbnail uploads reachable URL and returns full CDN URL", asyn
   ]);
   assert.ok(typeof res === "object");
   assert.ok(typeof res.url === "string");
-  assert.match(res.url, /^https:\/\/cdn\.kocakz\.me\/images\/.+\.webp$/);
+  assert.match(res.url, /^https:\/\/media\.kocakz\.me\/.+\.webp$/);
   assert.ok(typeof res.original === "string");
+});
+
+test("migrateCacheFile converts cdn.kocakz.me/images/ entries to media.kocakz.me/", async () => {
+  const { migrateCacheFile } = await import("../src/utils/migrate-cache.js");
+  const tempCachePath = path.resolve(ROOT_DIR, ".cache", "test-migrate.json");
+  
+  fs.writeFileSync(
+    tempCachePath,
+    JSON.stringify({
+      "raw::https://example.com/thumb.png": "https://cdn.kocakz.me/images/12345.webp",
+      "script::https://example.com/banner.png": "https://media.kocakz.me/67890.webp",
+    }),
+    "utf-8"
+  );
+
+  const res = migrateCacheFile(tempCachePath);
+  assert.equal(res.total, 2);
+  assert.equal(res.migrated, 1);
+
+  const updated = JSON.parse(fs.readFileSync(tempCachePath, "utf-8"));
+  assert.equal(updated["raw::https://example.com/thumb.png"], "https://media.kocakz.me/12345.webp");
+  assert.equal(updated["script::https://example.com/banner.png"], "https://media.kocakz.me/67890.webp");
+
+  fs.unlinkSync(tempCachePath);
 });
 
 
