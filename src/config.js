@@ -52,11 +52,12 @@ export const PATHS = {
 
 export const CDN_CONFIG = {
   baseUrl: (process.env.CDN_URL || "https://cdn.kocakz.me").replace(/\/+$/, ""),
+  mediaUrl: (process.env.MEDIA_URL || "https://media.kocakz.me").replace(/\/+$/, ""),
   apiKey: process.env.CDN_API_KEY || "",
   fallbacks: {
-    game: `${(process.env.CDN_URL || "https://cdn.kocakz.me").replace(/\/+$/, "")}/no-game.webp`,
-    script: `${(process.env.CDN_URL || "https://cdn.kocakz.me").replace(/\/+$/, "")}/no-script.webp`,
-    profile: `${(process.env.CDN_URL || "https://cdn.kocakz.me").replace(/\/+$/, "")}/no-profile.webp`,
+    game: `${(process.env.MEDIA_URL || "https://media.kocakz.me").replace(/\/+$/, "")}/no-game.webp`,
+    script: `${(process.env.MEDIA_URL || "https://media.kocakz.me").replace(/\/+$/, "")}/no-script.webp`,
+    profile: `${(process.env.MEDIA_URL || "https://media.kocakz.me").replace(/\/+$/, "")}/no-profile.webp`,
   },
 };
 

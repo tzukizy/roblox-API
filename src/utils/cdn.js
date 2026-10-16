@@ -149,6 +149,7 @@ export async function resolveCdnImage(rawUrl, { process = false, timeoutMs = 150
   }
 
   const baseUrl = CDN_CONFIG.baseUrl;
+  const mediaUrl = CDN_CONFIG.mediaUrl || "https://media.kocakz.me";
   const apiKey = CDN_CONFIG.apiKey;
 
   try {
@@ -178,11 +179,11 @@ export async function resolveCdnImage(rawUrl, { process = false, timeoutMs = 150
     let fullCdnUrl = "";
 
     if (filename) {
-      fullCdnUrl = `${baseUrl}/${filename}`;
+      fullCdnUrl = `${mediaUrl}/${filename}`;
     } else if (json.data?.image?.url) {
-      fullCdnUrl = `${baseUrl}/${json.data.image.url.replace(/^\/?(images\/)?/, "")}`;
+      fullCdnUrl = `${mediaUrl}/${json.data.image.url.replace(/^\/?(images\/)?/, "")}`;
     } else if (json.data?.url) {
-      fullCdnUrl = `${baseUrl}/${json.data.url.replace(/^\/?(images\/)?/, "")}`;
+      fullCdnUrl = `${mediaUrl}/${json.data.url.replace(/^\/?(images\/)?/, "")}`;
     }
 
     if (fullCdnUrl) {
