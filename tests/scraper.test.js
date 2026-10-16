@@ -499,7 +499,7 @@ test("Universal acts like a game conforming to Unified Game Schema and paginatio
       keyCount: 1,
       verifiedCount: 2,
     },
-    thumbnail: CDN_CONFIG?.fallbacks?.game || "https://cdn.kocakz.me/images/no-game.webp",
+    thumbnail: CDN_CONFIG?.fallbacks?.game || "https://cdn.kocakz.me/no-game.webp",
   });
 
   assert.equal(universalGame.id, 0);
@@ -507,7 +507,7 @@ test("Universal acts like a game conforming to Unified Game Schema and paginatio
   assert.equal(universalGame.slug, "universal");
   assert.equal(universalGame.path, "/game/universal");
   assert.equal(typeof universalGame.thumbnail, "object");
-  assert.equal(universalGame.thumbnail.url, "https://cdn.kocakz.me/images/no-game.webp");
+  assert.equal(universalGame.thumbnail.url, "https://cdn.kocakz.me/no-game.webp");
   assert.equal(universalGame.script.count, 3);
   assert.equal(universalGame.script.freeCount, 2);
   assert.equal(universalGame.script.keyCount, 1);
@@ -642,15 +642,15 @@ test("place-to-universe cache persistence saves and restores mappings", async ()
 
 test("resolveScriptThumbnail uses CDN fallback for /images/no-script.webp and uploads others with process: true", async () => {
   const fallback = await resolveScriptThumbnail("/images/no-script.webp");
-  assert.equal(fallback.url, "https://cdn.kocakz.me/images/no-script.webp");
+  assert.equal(fallback.url, "https://cdn.kocakz.me/no-script.webp");
   assert.equal(fallback.original, null);
   assert.equal(fallback.scriptblox, null);
 
   const empty = await resolveScriptThumbnail("");
-  assert.equal(empty.url, "https://cdn.kocakz.me/images/no-script.webp");
+  assert.equal(empty.url, "https://cdn.kocakz.me/no-script.webp");
 
   const nullThumb = await resolveScriptThumbnail(null);
-  assert.equal(nullThumb.url, "https://cdn.kocakz.me/images/no-script.webp");
+  assert.equal(nullThumb.url, "https://cdn.kocakz.me/no-script.webp");
 });
 
 test("resolveScriptThumbnail converts /images/sb/ to /images/script/ for scriptblox property", async () => {
@@ -663,11 +663,11 @@ test("resolveScriptThumbnail converts /images/sb/ to /images/script/ for scriptb
 
 test("resolveAvatarThumbnail uses CDN fallback for /images/user-default.webp and uploads others with process: false", async () => {
   const fallback = await resolveAvatarThumbnail("/images/user-default.webp");
-  assert.equal(fallback.url, "https://cdn.kocakz.me/images/no-profile.webp");
+  assert.equal(fallback.url, "https://cdn.kocakz.me/no-profile.webp");
   assert.equal(fallback.original, null);
 
   const empty = await resolveAvatarThumbnail(null);
-  assert.equal(empty.url, "https://cdn.kocakz.me/images/no-profile.webp");
+  assert.equal(empty.url, "https://cdn.kocakz.me/no-profile.webp");
 });
 
 test("resolveGameThumbnail checks candidate reachability via HEAD and falls back to no-game.webp when all fail", async () => {
@@ -675,11 +675,11 @@ test("resolveGameThumbnail checks candidate reachability via HEAD and falls back
     "https://example.com/non-existent-image-12345.png",
     "https://example.com/another-broken-404.jpg",
   ]);
-  assert.equal(allFail.url, "https://cdn.kocakz.me/images/no-game.webp");
+  assert.equal(allFail.url, "https://cdn.kocakz.me/no-game.webp");
   assert.equal(allFail.original, null);
 
   const emptyList = await resolveGameThumbnail([]);
-  assert.equal(emptyList.url, "https://cdn.kocakz.me/images/no-game.webp");
+  assert.equal(emptyList.url, "https://cdn.kocakz.me/no-game.webp");
 });
 
 test("resolveGameThumbnail uploads reachable URL and returns full CDN URL", async () => {

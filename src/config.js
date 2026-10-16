@@ -54,9 +54,9 @@ export const CDN_CONFIG = {
   baseUrl: (process.env.CDN_URL || "https://cdn.kocakz.me").replace(/\/+$/, ""),
   apiKey: process.env.CDN_API_KEY || "",
   fallbacks: {
-    game: `${(process.env.CDN_URL || "https://cdn.kocakz.me").replace(/\/+$/, "")}/images/no-game.webp`,
-    script: `${(process.env.CDN_URL || "https://cdn.kocakz.me").replace(/\/+$/, "")}/images/no-script.webp`,
-    profile: `${(process.env.CDN_URL || "https://cdn.kocakz.me").replace(/\/+$/, "")}/images/no-profile.webp`,
+    game: `${(process.env.CDN_URL || "https://cdn.kocakz.me").replace(/\/+$/, "")}/no-game.webp`,
+    script: `${(process.env.CDN_URL || "https://cdn.kocakz.me").replace(/\/+$/, "")}/no-script.webp`,
+    profile: `${(process.env.CDN_URL || "https://cdn.kocakz.me").replace(/\/+$/, "")}/no-profile.webp`,
   },
 };
 

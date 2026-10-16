@@ -178,11 +178,11 @@ export async function resolveCdnImage(rawUrl, { process = false, timeoutMs = 150
     let fullCdnUrl = "";
 
     if (filename) {
-      fullCdnUrl = `${baseUrl}/images/${filename}`;
+      fullCdnUrl = `${baseUrl}/${filename}`;
     } else if (json.data?.image?.url) {
-      fullCdnUrl = json.data.image.url;
+      fullCdnUrl = `${baseUrl}/${json.data.image.url.replace(/^\/?(images\/)?/, "")}`;
     } else if (json.data?.url) {
-      fullCdnUrl = json.data.url;
+      fullCdnUrl = `${baseUrl}/${json.data.url.replace(/^\/?(images\/)?/, "")}`;
     }
 
     if (fullCdnUrl) {
