@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   getScriptGameSlug,
+  cleanGameTitle,
   resolveScriptImageUrl,
   buildGameThumbnails,
   normalizeRobloxThumb,
@@ -157,6 +158,30 @@ test("Helper getScriptGameSlug produces expected slug formats", () => {
   );
   assert.equal(getScriptGameSlug(0, "universal"), "universal");
   assert.equal(getScriptGameSlug(undefined, "Universal Script"), "universal");
+  assert.equal(
+    getScriptGameSlug(9391468976, "[SKY ASSASSIN] Jujutsu Shenanigans"),
+    "9391468976-jujutsu-shenanigans",
+  );
+  assert.equal(
+    getScriptGameSlug(17625359962, "[🎃] RIVALS"),
+    "17625359962-rivals",
+  );
+});
+
+test("Helper cleanGameTitle removes empty brackets, event tags, and emojis", () => {
+  assert.equal(cleanGameTitle("[🎃] RIVALS"), "RIVALS");
+  assert.equal(cleanGameTitle("[] RIVALS"), "RIVALS");
+  assert.equal(
+    cleanGameTitle("[SKY ASSASSIN] Jujutsu Shenanigans"),
+    "Jujutsu Shenanigans",
+  );
+  assert.equal(cleanGameTitle("[UPDATE 20] Blox Fruits"), "Blox Fruits");
+  assert.equal(cleanGameTitle("[] Murder Mystery 2"), "Murder Mystery 2");
+  assert.equal(cleanGameTitle("[🎃 HALLOWEEN] Adopt Me!"), "Adopt Me!");
+  assert.equal(cleanGameTitle("Brookhaven 🏡RP"), "Brookhaven 🏡RP");
+  assert.equal(cleanGameTitle("[SOLO]"), "SOLO");
+  assert.equal(cleanGameTitle(""), "");
+  assert.equal(cleanGameTitle(null), "");
 });
 
 test("Helper resolveScriptImageUrl handles various URL inputs", () => {

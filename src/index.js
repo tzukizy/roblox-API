@@ -8,6 +8,8 @@ import {
   toSafeFilename,
   slugToHash,
   paginateGames,
+  getScriptGameSlug,
+  cleanGameTitle,
 } from "./utils/helpers.js";
 import {
   resolveScriptThumbnail,
@@ -133,9 +135,10 @@ export async function runScraper() {
 
     try {
       const detailed = await fetchScriptDetails(slug);
-      const base = detailed
-        ? { ...scriptSummary, ...detailed }
-        : { ...scriptSummary };
+      if (!detailed) {
+        throw new Error(`fetchScriptDetails returned null for ${slug}`);
+      }
+      const base = { ...scriptSummary, ...detailed };
 
       // Detect Universal or Hub scripts (gameId <= 0 or isUniversal/isHub)
       const isHubOrUniversal =
@@ -281,63 +284,116 @@ export async function runScraper() {
           )
         : rawComments;
 
+      const resolvedGameName =
+        base.game?.name ||
+        (finalPlaceId === 0
+          ? "Universal Scripts"
+          : `Game #${finalPlaceId}`);
+      const resolvedGameSlug =
+        finalPlaceId === 0
+          ? "universal"
+          : getScriptGameSlug(finalPlaceId, resolvedGameName);
+
       const fullScript = {
-        ...base,
-        thumbnail: cdnThumbnail,
-        image: cdnThumbnail,
-        owner: resolvedOwner,
-        isUniversal: Boolean(base.isUniversal || finalPlaceId === 0),
-        isHub: Boolean(base.isHub),
-        supportedGames: resolvedSupportedGames,
-        changelog:
-          Array.isArray(base.changelog) && base.changelog.length > 0
-            ? base.changelog
-            : changelog,
-        comments: resolvedComments,
-        game: {
-          ...(scriptSummary.game || {}),
-          ...(detailed?.game || {}),
-          name:
-            base.game?.name ||
-            (finalPlaceId === 0
-              ? "Universal Scripts"
-              : `Game #${finalPlaceId}`),
-          imageUrl: resolvedGameImage,
-          thumbnail: resolvedGameImage,
-          gameId: finalPlaceId,
-          placeId: finalPlaceId,
-        },
+          _id: scriptSummary._id || detailed?._id,
+          title: scriptSummary.title || detailed?.title,
+          game: {
+            ...(scriptSummary.game || {}),
+            ...(detailed?.game || {}),
+            name: resolvedGameName,
+            slug: resolvedGameSlug,
+            path: `/game/${resolvedGameSlug}`,
+            imageUrl: resolvedGameImage,
+            thumbnail: resolvedGameImage,
+            gameId: finalPlaceId,
+            placeId: finalPlaceId,
+          },
+          slug: scriptSummary.slug || detailed?.slug,
+          verified: Boolean(base.verified),
+          key: Boolean(base.key),
+          keyless: base.keyless === true || base.key === false,
+          views: Number(base.views || 0),
+          executes: Number(base.executes || 0),
+          scriptType: base.scriptType || "free",
+          isUniversal: Boolean(base.isUniversal),
+          isPatched: Boolean(base.isPatched),
+          visibility: base.visibility || "public",
+          indexUnlisted: Boolean(base.indexUnlisted),
+          image: cdnThumbnail,
+          thumbnail: cdnThumbnail,
+          likeCount: Number(base.likeCount || 0),
+          dislikeCount: Number(base.dislikeCount || 0),
+          createdAt: base.createdAt || new Date().toISOString(),
+          updatedAt: base.updatedAt || base.createdAt,
+          lastBump: base.lastBump || base.updatedAt || base.createdAt,
+          script: base.script || "",
+          features: base.features || "",
+          tags: Array.isArray(base.tags) ? base.tags : [],
+          discord: base.discord || "",
+          keyLink: base.keyLink || "",
+          owner: resolvedOwner,
+          reviewed: base.reviewed || null,
+          liked: Boolean(base.liked),
+          disliked: Boolean(base.disliked),
+          cstatus: base.cstatus || null,
+          isHub: Boolean(base.isHub),
+          supportedGames: resolvedSupportedGames,
+          changelog:
+            Array.isArray(base.changelog) && base.changelog.length > 0
+              ? base.changelog
+              : changelog,
+          comments: resolvedComments,
+        };
+
+        scriptDetailsCache.set(slug, fullScript);
+        return fullScript;
+      } catch (err) {
+        console.warn(
+          `[ScriptBlox] Could not fetch detailed script for ${slug}: ${err.message}`,
+        );
+      }
+
+      const fallbackThumb = await resolveScriptThumbnail(
+        scriptSummary.thumbnail || scriptSummary.image,
+      );
+      let fallbackOwner = scriptSummary.owner
+        ? { ...scriptSummary.owner }
+        : null;
+      if (fallbackOwner) {
+        const fallbackAvatar = await resolveAvatarThumbnail(
+          fallbackOwner.profile || fallbackOwner.profilePicture,
+        );
+        fallbackOwner.profile = fallbackAvatar;
+        fallbackOwner.profilePicture = fallbackAvatar;
+      }
+      let fallbackGame = scriptSummary.game ? { ...scriptSummary.game } : null;
+      if (fallbackGame) {
+        const fbPlaceId = Number(
+          fallbackGame.gameId || fallbackGame.placeId || 0,
+        );
+        const fbName =
+          fallbackGame.name ||
+          (fbPlaceId === 0 ? "Universal Scripts" : `Game #${fbPlaceId}`);
+        const fbSlug =
+          fbPlaceId === 0 ? "universal" : getScriptGameSlug(fbPlaceId, fbName);
+        fallbackGame = {
+          ...fallbackGame,
+          name: fbName,
+          slug: fbSlug,
+          path: `/game/${fbSlug}`,
+          gameId: fbPlaceId,
+          placeId: fbPlaceId,
+        };
+      }
+      const fallbackSummary = {
+        ...scriptSummary,
+        thumbnail: fallbackThumb,
+        image: fallbackThumb,
+        owner: fallbackOwner,
+        game: fallbackGame,
       };
-
-      scriptDetailsCache.set(slug, fullScript);
-      return fullScript;
-    } catch (err) {
-      console.warn(
-        `[ScriptBlox] Could not fetch detailed script for ${slug}: ${err.message}`,
-      );
-    }
-
-    const fallbackThumb = await resolveScriptThumbnail(
-      scriptSummary.thumbnail || scriptSummary.image,
-    );
-    let fallbackOwner = scriptSummary.owner
-      ? { ...scriptSummary.owner }
-      : null;
-    if (fallbackOwner) {
-      const fallbackAvatar = await resolveAvatarThumbnail(
-        fallbackOwner.profile || fallbackOwner.profilePicture,
-      );
-      fallbackOwner.profile = fallbackAvatar;
-      fallbackOwner.profilePicture = fallbackAvatar;
-    }
-    const fallbackSummary = {
-      ...scriptSummary,
-      thumbnail: fallbackThumb,
-      image: fallbackThumb,
-      owner: fallbackOwner,
-    };
-    scriptDetailsCache.set(slug, fallbackSummary);
-    return fallbackSummary;
+      scriptDetailsCache.set(slug, fallbackSummary);
+      return fallbackSummary;
   }
 
   // ----------------------------------------------------

@@ -1,12 +1,36 @@
 import fs from "node:fs";
 import path from "node:path";
-import { CDN_CONFIG, PATHS, USER_AGENTS } from "../config.js";
+import { createHash } from "node:crypto";
+import { CDN_CONFIG, R2_CONFIG, PATHS, USER_AGENTS } from "../config.js";
 import { resolveScriptImageUrl, normalizeRobloxThumb } from "./helpers.js";
+import { processScriptImage, processSquareImage } from "./image-processor.js";
+import { isR2Configured, uploadBufferToR2 } from "./r2.js";
 
 // In-memory persistent cache: cacheKey (e.g. "raw::https://..." or "script::https://...") -> full CDN URL
 const cdnCache = new Map();
 let cacheLoaded = false;
 let saveScheduled = false;
+
+/**
+ * Deterministically generates SHA-256 hash matching WebAuthCDN.
+ *
+ * @param {string} url
+ * @param {boolean|string} [isProcessed=false]
+ * @returns {string}
+ */
+export function urlToHash(url, isProcessed = false) {
+  const hashKey = R2_CONFIG.hashKey || process.env.HASH_KEY || "";
+  const prefix =
+    isProcessed === false
+      ? "raw:"
+      : typeof isProcessed === "string"
+        ? `${isProcessed}:`
+        : "";
+
+  return createHash("sha256")
+    .update(hashKey + prefix + url)
+    .digest("hex");
+}
 
 /**
  * Loads cached CDN image mappings from .cache/cdn-images.json.
@@ -26,14 +50,23 @@ export function loadCdnCache() {
             const normalized = value
               .replace(/^https?:\/\/cdn\.kocakz\.me\/images\//, `${mediaUrl}/`)
               .replace(/^https?:\/\/cdn\.kocakz\.me\//, `${mediaUrl}/`)
-              .replace(/^https?:\/\/media\.kocakz\.me\/images\//, `${mediaUrl}/`);
+              .replace(
+                /^https?:\/\/media\.kocakz\.me\/images\//,
+                `${mediaUrl}/`,
+              )
+              .replace(
+                /^https?:\/\/[a-z0-9]+\.r2\.cloudflarestorage\.com\//,
+                `${mediaUrl}/`,
+              );
             cdnCache.set(key, normalized);
           }
         }
       }
     }
   } catch (err) {
-    console.warn(`[CDN Cache] Failed to load cache from ${PATHS.cdnCache}: ${err.message}`);
+    console.warn(
+      `[CDN Cache] Failed to load cache from ${PATHS.cdnCache}: ${err.message}`,
+    );
   }
 
   return cdnCache.size;
@@ -64,8 +97,8 @@ function scheduleCacheSave() {
   if (saveScheduled) return;
   saveScheduled = true;
   setTimeout(() => {
-    saveScheduled = false;
     saveCdnCache();
+    saveScheduled = false;
   }, 1000).unref?.();
 }
 
@@ -116,18 +149,22 @@ export async function isUrlReachable(url, timeoutMs = 3500) {
 }
 
 /**
- * Resolves an image through the KocakZ CDN.
+ * Resolves an image through direct Cloudflare R2 upload or HTTP WebAuthCDN fallback.
  * 1. Checks memory & disk cache.
- * 2. Ingests via POST /api/image on cache miss.
- * 3. Returns full public CDN URL (https://media.kocakz.me/[hash].webp).
+ * 2. If R2 credentials are configured: downloads image, processes buffer (watermark or square),
+ *    and uploads directly to R2 bucket as <hash>.webp.
+ * 3. Fallback: Calls POST /api/image on WebAuthCDN.
  *
  * @param {string} rawUrl
  * @param {Object} [options]
  * @param {boolean} [options.process=false]
- * @param {number} [options.timeoutMs=15000]
+ * @param {number} [options.timeoutMs=20000]
  * @returns {Promise<string|null>}
  */
-export async function resolveCdnImage(rawUrl, { process = false, timeoutMs = 15000 } = {}) {
+export async function resolveCdnImage(
+  rawUrl,
+  { process = false, timeoutMs = 20000 } = {},
+) {
   if (!rawUrl || typeof rawUrl !== "string") return null;
 
   loadCdnCache();
@@ -153,8 +190,61 @@ export async function resolveCdnImage(rawUrl, { process = false, timeoutMs = 150
     return cdnCache.get(cacheKey);
   }
 
+  const mediaUrl =
+    R2_CONFIG.publicUrl || CDN_CONFIG.mediaUrl || "https://media.kocakz.me";
+
+  // --- 1. DIRECT R2 UPLOAD PATH (Preferred: bypasses CDN rate limits) ---
+  if (isR2Configured() && R2_CONFIG.hashKey) {
+    try {
+      const hash = urlToHash(targetUrl, process);
+      const filename = `${hash}.webp`;
+      const fullCdnUrl = `${mediaUrl}/${filename}`;
+
+      // Download original image buffer
+      const downloadRes = await fetch(targetUrl, {
+        headers: {
+          "User-Agent": USER_AGENTS.browser,
+          Accept: "image/*,*/*;q=0.8",
+        },
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+
+      if (!downloadRes.ok) {
+        return null;
+      }
+
+      const inputBuffer = Buffer.from(await downloadRes.arrayBuffer());
+      if (inputBuffer.length === 0) {
+        return null;
+      }
+
+      // Process image buffer matching WebAuthCDN pipeline
+      let processedBuffer;
+      if (process) {
+        processedBuffer = await processScriptImage(inputBuffer);
+      } else {
+        processedBuffer = await processSquareImage(inputBuffer, 160);
+      }
+
+      // Upload directly to Cloudflare R2 bucket
+      await uploadBufferToR2(
+        processedBuffer,
+        filename,
+        "image/webp",
+        timeoutMs,
+      );
+
+      cdnCache.set(cacheKey, fullCdnUrl);
+      scheduleCacheSave();
+      return fullCdnUrl;
+    } catch (err) {
+      // Direct R2 upload failed, log and try HTTP fallback
+      console.warn(`[Direct R2] Failed for ${targetUrl}: ${err.message}`);
+    }
+  }
+
+  // --- 2. HTTP FALLBACK PATH (WebAuthCDN POST /api/image) ---
   const baseUrl = CDN_CONFIG.baseUrl;
-  const mediaUrl = CDN_CONFIG.mediaUrl || "https://media.kocakz.me";
   const apiKey = CDN_CONFIG.apiKey;
 
   try {
@@ -218,7 +308,9 @@ export async function resolveGameThumbnail(candidateUrls) {
     candidateUrls &&
     typeof candidateUrls === "object" &&
     !Array.isArray(candidateUrls) &&
-    typeof candidateUrls.url === "string"
+    typeof candidateUrls.url === "string" &&
+    !candidateUrls.url.includes("no-game") &&
+    !candidateUrls.url.includes("no-script")
   ) {
     return {
       url: candidateUrls.url,
@@ -228,9 +320,11 @@ export async function resolveGameThumbnail(candidateUrls) {
 
   loadCdnCache();
 
-  const rawList = Array.isArray(candidateUrls) ? candidateUrls : [candidateUrls];
+  const rawList = Array.isArray(candidateUrls)
+    ? candidateUrls
+    : [candidateUrls];
   const candidates = rawList
-    .map((u) => (typeof u === "object" && u ? (u.original || u.url) : u))
+    .map((u) => (typeof u === "object" && u ? u.original || u.url : u))
     .filter((u) => u && typeof u === "string")
     .map((u) => u.trim())
     .filter((u) => {
@@ -243,7 +337,11 @@ export async function resolveGameThumbnail(candidateUrls) {
       ) {
         return false;
       }
-      if (u === "/brand/kocakz-logo.png" || u.endsWith("/brand/kocakz-logo.png")) return false;
+      if (
+        u === "/brand/kocakz-logo.png" ||
+        u.endsWith("/brand/kocakz-logo.png")
+      )
+        return false;
       return true;
     });
 
@@ -302,7 +400,8 @@ export async function resolveScriptThumbnail(imageUrl) {
   if (
     imageUrl &&
     typeof imageUrl === "object" &&
-    typeof imageUrl.url === "string"
+    typeof imageUrl.url === "string" &&
+    !imageUrl.url.includes("no-script")
   ) {
     return {
       url: imageUrl.url,
@@ -313,7 +412,12 @@ export async function resolveScriptThumbnail(imageUrl) {
 
   loadCdnCache();
 
-  if (!imageUrl || typeof imageUrl !== "string") {
+  const candidateRaw =
+    typeof imageUrl === "object" && imageUrl !== null
+      ? imageUrl.original || imageUrl.scriptblox || ""
+      : imageUrl;
+
+  if (!candidateRaw || typeof candidateRaw !== "string") {
     return {
       url: CDN_CONFIG.fallbacks.script,
       original: null,
@@ -321,7 +425,7 @@ export async function resolveScriptThumbnail(imageUrl) {
     };
   }
 
-  const trimmed = imageUrl.trim();
+  const trimmed = candidateRaw.trim();
   if (
     !trimmed ||
     trimmed.includes("no-script") ||
@@ -367,7 +471,9 @@ export async function resolveAvatarThumbnail(avatarUrl) {
   if (
     avatarUrl &&
     typeof avatarUrl === "object" &&
-    typeof avatarUrl.url === "string"
+    typeof avatarUrl.url === "string" &&
+    !avatarUrl.url.includes("no-profile") &&
+    !avatarUrl.url.includes("user-default")
   ) {
     return {
       url: avatarUrl.url,
@@ -377,14 +483,19 @@ export async function resolveAvatarThumbnail(avatarUrl) {
 
   loadCdnCache();
 
-  if (!avatarUrl || typeof avatarUrl !== "string") {
+  const candidateRaw =
+    typeof avatarUrl === "object" && avatarUrl !== null
+      ? avatarUrl.original || ""
+      : avatarUrl;
+
+  if (!candidateRaw || typeof candidateRaw !== "string") {
     return {
       url: CDN_CONFIG.fallbacks.profile,
       original: null,
     };
   }
 
-  const trimmed = avatarUrl.trim();
+  const trimmed = candidateRaw.trim();
   if (
     !trimmed ||
     trimmed.includes("user-default") ||

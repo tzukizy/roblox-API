@@ -224,8 +224,34 @@ export async function buildUnifiedGame({
  * Builds canonical slug for a game matching WebAuth URL conventions.
  * Example: (2753915549, "Blox Fruits") -> "2753915549-blox-fruits"
  */
+/**
+ * Cleans a game name for human-readable SEO presentation by stripping
+ * empty brackets, bracketed event prefixes, emojis, and seasonal tags.
+ */
+export function cleanGameTitle(gameName) {
+  if (!gameName || typeof gameName !== "string") return "";
+  const raw = gameName.trim();
+  const stripped = raw
+    .replace(/\[\s*\]/g, " ")
+    .replace(/\[[^\]]*\]/g, " ")
+    .replace(/\([^\)]*\)/g, " ")
+    .replace(/^[\s\-–—:|/]+|[\s\-–—:|/]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!stripped) {
+    const fallback = raw.replace(/[\[\]\(\)]/g, "").trim();
+    return fallback || raw;
+  }
+
+  return stripped;
+}
+
 export function getScriptGameSlug(gameId, gameName) {
-  const cleanName = (gameName || "")
+  const rawName = (gameName || "").trim();
+  const effectiveName = cleanGameTitle(rawName) || rawName;
+
+  const cleanName = effectiveName
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");

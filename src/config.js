@@ -48,6 +48,21 @@ export const PATHS = {
   keylessPages: path.resolve(DATA_DIR, "keyless", "pages"),
   universal: path.resolve(DATA_DIR, "universal"),
   executor: path.resolve(DATA_DIR, "executor"),
+  assets: path.resolve(ROOT_DIR, "assets"),
+  font: path.resolve(ROOT_DIR, "assets", "fonts", "DMSans-VariableFont_opsz,wght.ttf"),
+  logo: path.resolve(ROOT_DIR, "assets", "brand", "kocakz-logo.png"),
+};
+
+export const R2_CONFIG = {
+  accountId: process.env.R2_ACCOUNT_ID?.trim() || "",
+  accessKeyId: process.env.R2_ACCESS_KEY_ID?.trim() || "",
+  secretAccessKey: process.env.R2_SECRET_ACCESS_KEY?.trim() || "",
+  bucketName: process.env.R2_BUCKET_NAME?.trim() || "kocakz-cdn",
+  endpoint: process.env.R2_ACCOUNT_ID
+    ? `https://${process.env.R2_ACCOUNT_ID.trim()}.r2.cloudflarestorage.com`
+    : "",
+  publicUrl: (process.env.MEDIA_URL || "https://media.kocakz.me").replace(/\/+$/, ""),
+  hashKey: process.env.HASH_KEY?.trim() || "",
 };
 
 export const CDN_CONFIG = {
