@@ -151,9 +151,10 @@ export async function isUrlReachable(url, timeoutMs = 3500) {
 /**
  * Resolves an image through direct Cloudflare R2 upload or HTTP WebAuthCDN fallback.
  * 1. Checks memory & disk cache.
- * 2. If R2 credentials are configured: downloads image, processes buffer (watermark or square),
+ * 2. Pre-flight: Probes https://media.kocakz.me/<hash>.webp via HTTP HEAD. If already live, returns immediately.
+ * 3. Direct R2 upload (if configured): downloads original image, processes buffer (watermark or square),
  *    and uploads directly to R2 bucket as <hash>.webp.
- * 3. Fallback: Calls POST /api/image on WebAuthCDN.
+ * 4. Fallback: Calls POST /api/image on WebAuthCDN.
  *
  * @param {string} rawUrl
  * @param {Object} [options]
@@ -193,12 +194,36 @@ export async function resolveCdnImage(
   const mediaUrl =
     R2_CONFIG.publicUrl || CDN_CONFIG.mediaUrl || "https://media.kocakz.me";
 
+  const hasHashKey = Boolean(R2_CONFIG.hashKey || process.env.HASH_KEY);
+  let hash = null;
+  let filename = null;
+  let fullCdnUrl = null;
+
+  if (hasHashKey) {
+    hash = urlToHash(targetUrl, process);
+    filename = `${hash}.webp`;
+    fullCdnUrl = `${mediaUrl}/${filename}`;
+
+    // Pre-flight check: if already on R2 / CDN, skip download and upload entirely
+    try {
+      if (await isUrlReachable(fullCdnUrl, 3500)) {
+        cdnCache.set(cacheKey, fullCdnUrl);
+        scheduleCacheSave();
+        return fullCdnUrl;
+      }
+    } catch {
+      // Proceed to upload path if reachability probe fails
+    }
+  }
+
   // --- 1. DIRECT R2 UPLOAD PATH (Preferred: bypasses CDN rate limits) ---
   if (isR2Configured() && R2_CONFIG.hashKey) {
     try {
-      const hash = urlToHash(targetUrl, process);
-      const filename = `${hash}.webp`;
-      const fullCdnUrl = `${mediaUrl}/${filename}`;
+      if (!hash) {
+        hash = urlToHash(targetUrl, process);
+        filename = `${hash}.webp`;
+        fullCdnUrl = `${mediaUrl}/${filename}`;
+      }
 
       // Download original image buffer
       const downloadRes = await fetch(targetUrl, {
