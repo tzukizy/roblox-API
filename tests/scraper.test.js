@@ -22,7 +22,7 @@ import {
   loadCdnCache,
   saveCdnCache,
 } from "../src/utils/cdn.js";
-import { CDN_CONFIG, ROOT_DIR } from "../src/config.js";
+import { CDN_CONFIG, ROOT_DIR, PATHS, SCRAPE_LIMITS } from "../src/config.js";
 import { scrapeRolimonsGameList } from "../src/scrapers/rolimons.js";
 import {
   fetchRobloxPlaceIcons,
@@ -257,6 +257,21 @@ test("fetchScripts fetches scripts from ScriptBlox", async () => {
   const script = res.scripts[0];
   assert.ok(script._id);
   assert.ok(script.title);
+});
+
+test("verified and unpatched scraper paths and limits are properly configured", async () => {
+  assert.ok(PATHS.verified.includes("verified"));
+  assert.ok(PATHS.verifiedPages.includes("pages"));
+  assert.ok(PATHS.unpatched.includes("unpatched"));
+  assert.ok(PATHS.unpatchedPages.includes("pages"));
+  assert.ok(typeof SCRAPE_LIMITS.verifiedScriptPages === "number");
+  assert.ok(typeof SCRAPE_LIMITS.unpatchedScriptPages === "number");
+
+  const verifiedRes = await fetchScripts({ verified: 1, max: 2 });
+  assert.ok(Array.isArray(verifiedRes.scripts));
+
+  const unpatchedRes = await fetchScripts({ patched: 0, max: 2 });
+  assert.ok(Array.isArray(unpatchedRes.scripts));
 });
 
 test("fetchExecutors returns list of Roblox executors", async () => {

@@ -101,5 +101,7 @@ jobs:
           curl -s "https://purge.jsdelivr.net/gh/tzukizy/roblox-API@main/data/trending/month.json" || true
           curl -s "https://purge.jsdelivr.net/gh/tzukizy/roblox-API@main/data/trending/all.json" || true
           curl -s "https://purge.jsdelivr.net/gh/tzukizy/roblox-API@main/data/keyless/scripts.json" || true
+          curl -s "https://purge.jsdelivr.net/gh/tzukizy/roblox-API@main/data/verified/scripts.json" || true
+          curl -s "https://purge.jsdelivr.net/gh/tzukizy/roblox-API@main/data/unpatched/scripts.json" || true
           curl -s "https://purge.jsdelivr.net/gh/tzukizy/roblox-API@main/data/game/games.json" || true
           echo "jsDelivr cache purge requests dispatched."

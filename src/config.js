@@ -46,6 +46,10 @@ export const PATHS = {
   trending: path.resolve(DATA_DIR, "trending"),
   keyless: path.resolve(DATA_DIR, "keyless"),
   keylessPages: path.resolve(DATA_DIR, "keyless", "pages"),
+  verified: path.resolve(DATA_DIR, "verified"),
+  verifiedPages: path.resolve(DATA_DIR, "verified", "pages"),
+  unpatched: path.resolve(DATA_DIR, "unpatched"),
+  unpatchedPages: path.resolve(DATA_DIR, "unpatched", "pages"),
   universal: path.resolve(DATA_DIR, "universal"),
   executor: path.resolve(DATA_DIR, "executor"),
   assets: path.resolve(ROOT_DIR, "assets"),
@@ -114,6 +118,12 @@ export const SCRAPE_LIMITS = {
   // Uncapped by default: fetches all available pages reported by upstream API
   keylessScriptPages: process.env.MAX_KEYLESS_PAGES
     ? Number(process.env.MAX_KEYLESS_PAGES)
+    : Infinity,
+  verifiedScriptPages: process.env.MAX_VERIFIED_PAGES
+    ? Number(process.env.MAX_VERIFIED_PAGES)
+    : Infinity,
+  unpatchedScriptPages: process.env.MAX_UNPATCHED_PAGES
+    ? Number(process.env.MAX_UNPATCHED_PAGES)
     : Infinity,
   universalScriptPages: process.env.MAX_UNIVERSAL_PAGES
     ? Number(process.env.MAX_UNIVERSAL_PAGES)

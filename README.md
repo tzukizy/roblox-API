@@ -81,6 +81,10 @@ $$\text{Request URL} = \text{<Base URL>} + \text{<path>}$$
 | `home/latest/{page}.json` | Paginated latest scripts (`1.json`, `2.json`, ...). |
 | `keyless/scripts.json` | Overview of scripts that do not require an execution key. |
 | `keyless/pages/{page}.json`| Paginated keyless scripts (`1.json`, `2.json`, ...). |
+| `verified/scripts.json` | Overview of verified community scripts. |
+| `verified/pages/{page}.json`| Paginated verified scripts (`1.json`, `2.json`, ...). |
+| `unpatched/scripts.json` | Overview of unpatched/working scripts (`patched: 0`). |
+| `unpatched/pages/{page}.json`| Paginated unpatched scripts (`1.json`, `2.json`, ...). |
 | `script/{hash}.json` | Detailed script file (full Lua code, author profile, changelog, comments). |
 
 > **Note on Script Filenames**: Detailed scripts under `script/` are indexed by the SHA-256 hash of their slug:

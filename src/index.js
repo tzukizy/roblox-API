@@ -46,6 +46,8 @@ import {
  * - Game Details: /data/game/[id].json, /data/game/[id]/[page].json
  * - Trending: /data/trending/[period].json
  * - Keyless: /data/keyless/scripts.json, /data/keyless/pages/[page].json
+ * - Verified: /data/verified/scripts.json, /data/verified/pages/[page].json
+ * - Unpatched: /data/unpatched/scripts.json, /data/unpatched/pages/[page].json
  * - Universal: /data/universal/scripts.json
  * - Executors: /data/executor/executors.json, /data/executor/[name].json
  */
@@ -75,6 +77,10 @@ export async function runScraper() {
     ensureDir(PATHS.trending),
     ensureDir(PATHS.keyless),
     ensureDir(PATHS.keylessPages),
+    ensureDir(PATHS.verified),
+    ensureDir(PATHS.verifiedPages),
+    ensureDir(PATHS.unpatched),
+    ensureDir(PATHS.unpatchedPages),
     ensureDir(PATHS.universal),
     ensureDir(PATHS.executor),
   ]);
@@ -770,9 +776,11 @@ export async function runScraper() {
   );
 
   // ----------------------------------------------------
-  // 4. KEYLESS & UNIVERSAL SCRIPTS
+  // 4. KEYLESS, VERIFIED, UNPATCHED & UNIVERSAL SCRIPTS
   // ----------------------------------------------------
-  console.log("\n[4/6] Scraping Keyless & Universal Scripts...");
+  console.log(
+    "\n[4/6] Scraping Keyless, Verified, Unpatched & Universal Scripts...",
+  );
 
   // Keyless scripts
   const keylessScripts = [];
@@ -804,6 +812,70 @@ export async function runScraper() {
     totalCount: keylessScripts.length,
     count: Math.min(20, keylessScripts.length),
     scripts: keylessScripts.slice(0, 20),
+  });
+
+  // Verified scripts
+  const verifiedScripts = [];
+  let targetVerifiedPages = SCRAPE_LIMITS.verifiedScriptPages;
+  for (let p = 1; p <= targetVerifiedPages; p++) {
+    const vRes = await fetchScripts({ page: p, verified: 1, max: 20 });
+    const pageScriptsRaw = vRes.scripts || [];
+    if (pageScriptsRaw.length === 0) break;
+    if (p === 1 && vRes.totalPages) {
+      targetVerifiedPages = Math.min(
+        SCRAPE_LIMITS.verifiedScriptPages,
+        vRes.totalPages,
+      );
+    }
+    const pageScripts = await Promise.all(
+      pageScriptsRaw.map((s) => getCompleteScript(s)),
+    );
+    verifiedScripts.push(...pageScripts);
+    await writeJsonFile(path.join(PATHS.verifiedPages, `${p}.json`), {
+      page: p,
+      totalPages: vRes.totalPages || targetVerifiedPages,
+      scripts: pageScripts,
+    });
+  }
+  // Save /data/verified/scripts.json with page 1 summary slice (20 scripts)
+  await writeJsonFile(path.join(PATHS.verified, "scripts.json"), {
+    page: 1,
+    totalPages: targetVerifiedPages,
+    totalCount: verifiedScripts.length,
+    count: Math.min(20, verifiedScripts.length),
+    scripts: verifiedScripts.slice(0, 20),
+  });
+
+  // Unpatched scripts (patched: 0)
+  const unpatchedScripts = [];
+  let targetUnpatchedPages = SCRAPE_LIMITS.unpatchedScriptPages;
+  for (let p = 1; p <= targetUnpatchedPages; p++) {
+    const uRes = await fetchScripts({ page: p, patched: 0, max: 20 });
+    const pageScriptsRaw = uRes.scripts || [];
+    if (pageScriptsRaw.length === 0) break;
+    if (p === 1 && uRes.totalPages) {
+      targetUnpatchedPages = Math.min(
+        SCRAPE_LIMITS.unpatchedScriptPages,
+        uRes.totalPages,
+      );
+    }
+    const pageScripts = await Promise.all(
+      pageScriptsRaw.map((s) => getCompleteScript(s)),
+    );
+    unpatchedScripts.push(...pageScripts);
+    await writeJsonFile(path.join(PATHS.unpatchedPages, `${p}.json`), {
+      page: p,
+      totalPages: uRes.totalPages || targetUnpatchedPages,
+      scripts: pageScripts,
+    });
+  }
+  // Save /data/unpatched/scripts.json with page 1 summary slice (20 scripts)
+  await writeJsonFile(path.join(PATHS.unpatched, "scripts.json"), {
+    page: 1,
+    totalPages: targetUnpatchedPages,
+    totalCount: unpatchedScripts.length,
+    count: Math.min(20, unpatchedScripts.length),
+    scripts: unpatchedScripts.slice(0, 20),
   });
 
   // Universal scripts
@@ -927,7 +999,7 @@ export async function runScraper() {
   }
 
   console.log(
-    `✓ Saved /data/keyless/scripts.json (${keylessScripts.length}), /data/universal/scripts.json (${universalScripts.length}), /data/game/universal.json and ${totalUniversalPages} pages in /data/game/universal/[page].json.`,
+    `✓ Saved /data/keyless/scripts.json (${keylessScripts.length}), /data/verified/scripts.json (${verifiedScripts.length}), /data/unpatched/scripts.json (${unpatchedScripts.length}), /data/universal/scripts.json (${universalScripts.length}), /data/game/universal.json and ${totalUniversalPages} pages in /data/game/universal/[page].json.`,
   );
 
   // ----------------------------------------------------
@@ -1098,6 +1170,14 @@ export async function runScraper() {
       keyless: {
         scripts: "data/keyless/scripts.json",
         pages: "data/keyless/pages/{page}.json",
+      },
+      verified: {
+        scripts: "data/verified/scripts.json",
+        pages: "data/verified/pages/{page}.json",
+      },
+      unpatched: {
+        scripts: "data/unpatched/scripts.json",
+        pages: "data/unpatched/pages/{page}.json",
       },
       universal: {
         scripts: "data/universal/scripts.json",

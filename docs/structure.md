@@ -90,6 +90,14 @@ data/
 │   ├── scripts.json               # Keyless scripts summary
 │   └── pages/[page].json          # Paginated keyless scripts (20 per page)
 │
+├── verified/
+│   ├── scripts.json               # Verified scripts summary
+│   └── pages/[page].json          # Paginated verified scripts (20 per page)
+│
+├── unpatched/
+│   ├── scripts.json               # Unpatched scripts summary
+│   └── pages/[page].json          # Paginated unpatched scripts (20 per page)
+│
 ├── universal/
 │   └── scripts.json               # Universal scripts summary
 │
@@ -389,6 +397,14 @@ data/
       "all": "string"
     },
     "keyless": {
+      "scripts": "string",
+      "pages": "string"
+    },
+    "verified": {
+      "scripts": "string",
+      "pages": "string"
+    },
+    "unpatched": {
       "scripts": "string",
       "pages": "string"
     },
