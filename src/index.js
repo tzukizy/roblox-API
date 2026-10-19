@@ -1142,9 +1142,12 @@ export async function runScraper() {
       if (copy.thumbnail) {
         copy.thumbnail = await resolveScriptThumbnail(copy.thumbnail);
       }
-      if (copy.logo) {
-        copy.logo = await resolveAvatarThumbnail(copy.logo);
-      }
+      const logoCandidates = [
+        copy.logo,
+        ...(Array.isArray(copy.logos) ? copy.logos : []),
+        copy.thumbnail?.url || copy.thumbnail,
+      ].filter(Boolean);
+      copy.logo = await resolveAvatarThumbnail(logoCandidates);
       return copy;
     }),
   );

@@ -505,6 +505,7 @@ export async function resolveAvatarThumbnail(avatarUrl) {
   if (
     avatarUrl &&
     typeof avatarUrl === "object" &&
+    !Array.isArray(avatarUrl) &&
     typeof avatarUrl.url === "string" &&
     !avatarUrl.url.includes("no-profile") &&
     !avatarUrl.url.includes("user-default")
@@ -517,44 +518,59 @@ export async function resolveAvatarThumbnail(avatarUrl) {
 
   loadCdnCache();
 
-  const candidateRaw =
-    typeof avatarUrl === "object" && avatarUrl !== null
-      ? avatarUrl.original || ""
-      : avatarUrl;
+  const rawList = Array.isArray(avatarUrl) ? avatarUrl : [avatarUrl];
+  const candidates = rawList
+    .map((u) => (typeof u === "object" && u ? u.original || u.url : u))
+    .filter((u) => u && typeof u === "string")
+    .map((u) => u.trim())
+    .map((u) => {
+      if (u.startsWith("//")) return "https:" + u;
+      if (u.startsWith("/")) return resolveScriptImageUrl(u);
+      return u;
+    })
+    .filter((u) => {
+      if (!u) return false;
+      if (
+        u.includes("user-default") ||
+        u.includes("no-profile") ||
+        u.includes("no-game") ||
+        u.includes("no-script") ||
+        u === "/brand/kocakz-logo.png" ||
+        u.endsWith("/brand/kocakz-logo.png")
+      ) {
+        return false;
+      }
+      return true;
+    });
 
-  if (!candidateRaw || typeof candidateRaw !== "string") {
-    return {
-      url: CDN_CONFIG.fallbacks.profile,
-      original: null,
-    };
+  // 1. Fast path: check if any candidate is already in cache
+  for (const candidate of candidates) {
+    const cacheKey = `raw::${candidate}`;
+    if (cdnCache.has(cacheKey)) {
+      return {
+        url: cdnCache.get(cacheKey),
+        original: candidate,
+      };
+    }
   }
 
-  const trimmed = candidateRaw.trim();
-  if (
-    !trimmed ||
-    trimmed.includes("user-default") ||
-    trimmed.includes("no-profile") ||
-    trimmed.includes("/brand/kocakz-logo.png")
-  ) {
-    return {
-      url: CDN_CONFIG.fallbacks.profile,
-      original: null,
-    };
+  // 2. Probe candidates in priority order using HTTP HEAD
+  for (const candidate of candidates) {
+    const reachable = await isUrlReachable(candidate);
+    if (reachable) {
+      const cdnUrl = await resolveCdnImage(candidate, { process: false });
+      if (cdnUrl) {
+        return {
+          url: cdnUrl,
+          original: candidate,
+        };
+      }
+    }
   }
 
-  const original = resolveScriptImageUrl(trimmed);
-  const cacheKey = `raw::${original}`;
-
-  if (cdnCache.has(cacheKey)) {
-    return {
-      url: cdnCache.get(cacheKey),
-      original,
-    };
-  }
-
-  const cdnUrl = await resolveCdnImage(original, { process: false });
+  // 3. Fallback when all candidates error
   return {
-    url: cdnUrl || CDN_CONFIG.fallbacks.profile,
-    original,
+    url: CDN_CONFIG.fallbacks.profile,
+    original: null,
   };
 }

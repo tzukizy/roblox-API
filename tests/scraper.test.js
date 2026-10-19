@@ -712,6 +712,15 @@ test("resolveAvatarThumbnail uses CDN fallback for /images/user-default.webp and
   assert.equal(empty.url, "https://media.kocakz.me/no-profile.webp");
 });
 
+test("resolveAvatarThumbnail probes candidate list in priority order", async () => {
+  const res = await resolveAvatarThumbnail([
+    "https://example.com/dead-logo-404.png",
+    "/images/user-default.webp",
+  ]);
+  assert.equal(res.url, "https://media.kocakz.me/no-profile.webp");
+  assert.equal(res.original, null);
+});
+
 test("resolveGameThumbnail checks candidate reachability via HEAD and falls back to no-game.webp when all fail", async () => {
   const allFail = await resolveGameThumbnail([
     "https://example.com/non-existent-image-12345.png",
