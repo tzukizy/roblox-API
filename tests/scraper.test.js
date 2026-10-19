@@ -18,10 +18,13 @@ import {
   resolveGameThumbnail,
   resolveScriptThumbnail,
   resolveAvatarThumbnail,
+  resolveExecutorThumbnail,
   resolveCdnImage,
   loadCdnCache,
   saveCdnCache,
 } from "../src/utils/cdn.js";
+import { processExecutorThumbnail } from "../src/utils/image-processor.js";
+import { resetExecutorCache } from "../src/utils/reset-executor-cache.js";
 import { CDN_CONFIG, ROOT_DIR, PATHS, SCRAPE_LIMITS } from "../src/config.js";
 import { scrapeRolimonsGameList } from "../src/scrapers/rolimons.js";
 import {
@@ -775,6 +778,73 @@ test("migrateCacheFile converts cdn.kocakz.me/images/ entries to media.kocakz.me
 
   fs.unlinkSync(tempCachePath);
 });
+
+test("processExecutorThumbnail creates 480x270 WebP banner with metadata and watermark", async () => {
+  const sharp = (await import("sharp")).default;
+  const dummyLogo = await sharp({
+    create: {
+      width: 256,
+      height: 256,
+      channels: 4,
+      background: { r: 18, g: 30, b: 49, alpha: 1 },
+    },
+  })
+    .png()
+    .toBuffer();
+
+  const outBuffer = await processExecutorThumbnail(dummyLogo);
+  assert.ok(Buffer.isBuffer(outBuffer));
+  assert.ok(outBuffer.length > 0);
+
+  const meta = await sharp(outBuffer).metadata();
+  assert.equal(meta.width, 480);
+  assert.equal(meta.height, 270);
+  assert.equal(meta.format, "webp");
+});
+
+test("resolveExecutorThumbnail falls back to no-script.webp when candidates 404 or are empty", async () => {
+  const empty = await resolveExecutorThumbnail([]);
+  assert.equal(empty.url, "https://media.kocakz.me/no-script.webp");
+  assert.equal(empty.original, null);
+
+  const dead = await resolveExecutorThumbnail([
+    "https://example.com/non-existent-logo-12345.png",
+    "/images/no-profile.webp",
+  ]);
+  assert.equal(dead.url, "https://media.kocakz.me/no-script.webp");
+  assert.equal(dead.original, null);
+});
+
+test("resetExecutorCache purges only executor entries and preserves script/game cache", () => {
+  const tempCachePath = path.resolve(ROOT_DIR, ".cache", "test-reset-exec.json");
+
+  fs.writeFileSync(
+    tempCachePath,
+    JSON.stringify({
+      "executor::https://cdn.weao.gg/slug/serotonin/logo.png": "https://media.kocakz.me/exec1.webp",
+      "script::https://scriptblox.com/images/exec/thumbs/serotonin.webp": "https://media.kocakz.me/exec2.webp",
+      "raw::https://cdn.weao.gg/slug/volt/logo.png": "https://media.kocakz.me/exec3.webp",
+      "raw::https://tr.rbxcdn.com/game-thumb.png": "https://media.kocakz.me/game1.webp",
+      "script::https://scriptblox.com/images/sb/normal-script.png": "https://media.kocakz.me/script1.webp",
+    }),
+    "utf-8"
+  );
+
+  const res = resetExecutorCache(tempCachePath);
+  assert.equal(res.total, 5);
+  assert.equal(res.removed, 3);
+  assert.equal(res.remaining, 2);
+
+  const updated = JSON.parse(fs.readFileSync(tempCachePath, "utf-8"));
+  assert.equal(updated["executor::https://cdn.weao.gg/slug/serotonin/logo.png"], undefined);
+  assert.equal(updated["script::https://scriptblox.com/images/exec/thumbs/serotonin.webp"], undefined);
+  assert.equal(updated["raw::https://cdn.weao.gg/slug/volt/logo.png"], undefined);
+  assert.equal(updated["raw::https://tr.rbxcdn.com/game-thumb.png"], "https://media.kocakz.me/game1.webp");
+  assert.equal(updated["script::https://scriptblox.com/images/sb/normal-script.png"], "https://media.kocakz.me/script1.webp");
+
+  fs.unlinkSync(tempCachePath);
+});
+
 
 
 

@@ -3,7 +3,11 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { CDN_CONFIG, R2_CONFIG, PATHS, USER_AGENTS } from "../config.js";
 import { resolveScriptImageUrl, normalizeRobloxThumb } from "./helpers.js";
-import { processScriptImage, processSquareImage } from "./image-processor.js";
+import {
+  processScriptImage,
+  processSquareImage,
+  processExecutorThumbnail,
+} from "./image-processor.js";
 import { isR2Configured, uploadBufferToR2 } from "./r2.js";
 
 // In-memory persistent cache: cacheKey (e.g. "raw::https://..." or "script::https://...") -> full CDN URL
@@ -186,7 +190,13 @@ export async function resolveCdnImage(
     targetUrl = normalizeRobloxThumb(targetUrl);
   }
 
-  const cacheKey = `${shouldProcess ? "script" : "raw"}::${targetUrl}`;
+  const prefix =
+    shouldProcess === false
+      ? "raw"
+      : typeof shouldProcess === "string"
+        ? shouldProcess
+        : "script";
+  const cacheKey = `${prefix}::${targetUrl}`;
   if (cdnCache.has(cacheKey)) {
     return cdnCache.get(cacheKey);
   }
@@ -249,7 +259,9 @@ export async function resolveCdnImage(
 
       // Process image buffer matching WebAuthCDN pipeline
       let processedBuffer;
-      if (shouldProcess) {
+      if (shouldProcess === "executor") {
+        processedBuffer = await processExecutorThumbnail(inputBuffer);
+      } else if (shouldProcess) {
         processedBuffer = await processScriptImage(inputBuffer);
       } else {
         processedBuffer = await processSquareImage(inputBuffer, 160);
@@ -571,6 +583,93 @@ export async function resolveAvatarThumbnail(avatarUrl) {
   // 3. Fallback when all candidates error
   return {
     url: CDN_CONFIG.fallbacks.profile,
+    original: null,
+  };
+}
+
+/**
+ * Resolves an executor thumbnail by generating a 16:9 480x270 banner with centered logo,
+ * sampled background color, KocakZ watermark, and EXIF metadata.
+ * Probes candidates in priority order via HTTP HEAD.
+ * Checks memory and disk cache for "executor::<url>".
+ * Returns { url, original } or falls back to CDN fallback.
+ *
+ * @param {string[]|string|Object} candidateUrls
+ * @returns {Promise<{ url: string, original: string|null }>}
+ */
+export async function resolveExecutorThumbnail(candidateUrls) {
+  if (
+    candidateUrls &&
+    typeof candidateUrls === "object" &&
+    !Array.isArray(candidateUrls) &&
+    typeof candidateUrls.url === "string" &&
+    !candidateUrls.url.includes("no-profile") &&
+    !candidateUrls.url.includes("no-script") &&
+    !candidateUrls.url.includes("no-game")
+  ) {
+    return {
+      url: candidateUrls.url,
+      original: candidateUrls.original ?? null,
+    };
+  }
+
+  loadCdnCache();
+
+  const rawList = Array.isArray(candidateUrls)
+    ? candidateUrls
+    : [candidateUrls];
+  const candidates = rawList
+    .map((u) => (typeof u === "object" && u ? u.original || u.url : u))
+    .filter((u) => u && typeof u === "string")
+    .map((u) => u.trim())
+    .map((u) => {
+      if (u.startsWith("//")) return "https:" + u;
+      if (u.startsWith("/")) return resolveScriptImageUrl(u);
+      return u;
+    })
+    .filter((u) => {
+      if (!u) return false;
+      if (
+        u.includes("user-default") ||
+        u.includes("no-profile") ||
+        u.includes("no-game") ||
+        u.includes("no-script") ||
+        u === "/brand/kocakz-logo.png" ||
+        u.endsWith("/brand/kocakz-logo.png")
+      ) {
+        return false;
+      }
+      return true;
+    });
+
+  // 1. Fast path: check if any candidate is already in cache
+  for (const candidate of candidates) {
+    const cacheKey = `executor::${candidate}`;
+    if (cdnCache.has(cacheKey)) {
+      return {
+        url: cdnCache.get(cacheKey),
+        original: candidate,
+      };
+    }
+  }
+
+  // 2. Probe candidates in priority order using HTTP HEAD
+  for (const candidate of candidates) {
+    const reachable = await isUrlReachable(candidate);
+    if (reachable) {
+      const cdnUrl = await resolveCdnImage(candidate, { process: "executor" });
+      if (cdnUrl) {
+        return {
+          url: cdnUrl,
+          original: candidate,
+        };
+      }
+    }
+  }
+
+  // 3. Fallback when all candidates error
+  return {
+    url: CDN_CONFIG.fallbacks.script,
     original: null,
   };
 }

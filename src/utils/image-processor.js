@@ -141,6 +141,96 @@ export function applyKocakzMetadata(sharpInstance) {
 }
 
 /**
+ * Builds standard KocakZ watermark SVG and outlined brand logo composites.
+ *
+ * @param {Object} [options]
+ * @param {number} [options.width=480]
+ * @param {number} [options.height=270]
+ * @param {string} [options.watermarkText="KocakZ.com/script"]
+ * @param {number} [options.padding=5]
+ * @returns {Promise<Array<{ input: Buffer, left: number, top: number }>>}
+ */
+export async function buildWatermarkComposites({
+  width = 480,
+  height = 270,
+  watermarkText = "KocakZ.com/script",
+  padding = 5,
+} = {}) {
+  const fontSize = 14;
+  const font = getFont();
+  const scale = (1 / font.unitsPerEm) * fontSize;
+
+  let textWidth = 0;
+  for (let i = 0; i < watermarkText.length; i++) {
+    const glyph = font.charToGlyph(watermarkText[i]);
+    textWidth += (glyph.advanceWidth || 0) * scale;
+  }
+
+  const startX = width - padding - textWidth;
+  const startY = height - padding;
+
+  let currentX = startX;
+  const pathDataParts = [];
+
+  for (let i = 0; i < watermarkText.length; i++) {
+    const glyph = font.charToGlyph(watermarkText[i]);
+    const glyphPath = glyph.getPath(currentX, startY, fontSize);
+    pathDataParts.push(glyphPath.toPathData(2));
+    currentX += (glyph.advanceWidth || 0) * scale;
+  }
+
+  const combinedPathData = pathDataParts.join(" ");
+
+  const watermarkSvg = Buffer.from(`
+    <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+      <path d="${combinedPathData}"
+            fill="#111a35"
+            stroke="white"
+            stroke-width="1.5"
+            stroke-linejoin="round"
+            stroke-linecap="round"
+            paint-order="stroke fill"
+            opacity="0.85" />
+    </svg>
+  `);
+
+  const composites = [
+    {
+      input: watermarkSvg,
+      left: 0,
+      top: 0,
+    },
+  ];
+
+  if (fs.existsSync(PATHS.logo)) {
+    const resizedLogo = await sharp(PATHS.logo)
+      .resize(26, 26, {
+        fit: "inside",
+        withoutEnlargement: true,
+      })
+      .ensureAlpha()
+      .png()
+      .toBuffer();
+
+    const logoInput = await addOutline(resizedLogo, {
+      strokeWidth: 1,
+      strokeColor: { r: 255, g: 255, b: 255 },
+    });
+
+    const logoMeta = await sharp(logoInput).metadata();
+    const logoHeight = logoMeta.height ?? 28;
+
+    composites.push({
+      input: logoInput,
+      left: padding,
+      top: Math.round(height - logoHeight + padding / 2),
+    });
+  }
+
+  return composites;
+}
+
+/**
  * Processes script thumbnails (process: true):
  * 1. Crops top 480x228.
  * 2. Blurs backdrop to 480x270.
@@ -155,7 +245,6 @@ export async function processScriptImage(inputBuffer) {
   const width = 480;
   const height = 270;
   const cropHeight = 228;
-  const padding = 5;
 
   // Pre-normalize input image to 480x270 to ensure valid extraction bounds even if upstream image is slightly smaller (e.g. 473x270)
   const normalizedInput = await sharp(inputBuffer)
@@ -181,67 +270,11 @@ export async function processScriptImage(inputBuffer) {
     .png()
     .toBuffer();
 
-  // Copyright watermark vector rendering via opentype
-  const copyrightText = "KocakZ.com/script";
-  const fontSize = 14;
-  const font = getFont();
-  const scale = (1 / font.unitsPerEm) * fontSize;
-
-  let textWidth = 0;
-  for (let i = 0; i < copyrightText.length; i++) {
-    const glyph = font.charToGlyph(copyrightText[i]);
-    textWidth += (glyph.advanceWidth || 0) * scale;
-  }
-
-  const startX = width - padding - textWidth;
-  const startY = height - padding;
-
-  let currentX = startX;
-  const pathDataParts = [];
-
-  for (let i = 0; i < copyrightText.length; i++) {
-    const glyph = font.charToGlyph(copyrightText[i]);
-    const glyphPath = glyph.getPath(currentX, startY, fontSize);
-    pathDataParts.push(glyphPath.toPathData(2));
-    currentX += (glyph.advanceWidth || 0) * scale;
-  }
-
-  const combinedPathData = pathDataParts.join(" ");
-
-  const watermarkSvg = Buffer.from(`
-    <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
-      <path d="${combinedPathData}"
-            fill="#111a35"
-            stroke="white"
-            stroke-width="1.5"
-            stroke-linejoin="round"
-            stroke-linecap="round"
-            paint-order="stroke fill"
-            opacity="0.85" />
-    </svg>
-  `);
-
-  let logoInput = null;
-  let logoHeight = 28;
-
-  if (fs.existsSync(PATHS.logo)) {
-    const resizedLogo = await sharp(PATHS.logo)
-      .resize(26, 26, {
-        fit: "inside",
-        withoutEnlargement: true,
-      })
-      .ensureAlpha()
-      .png()
-      .toBuffer();
-
-    logoInput = await addOutline(resizedLogo, {
-      strokeWidth: 1,
-      strokeColor: { r: 255, g: 255, b: 255 },
-    });
-
-    const logoMeta = await sharp(logoInput).metadata();
-    logoHeight = logoMeta.height ?? 28;
-  }
+  const watermarkComposites = await buildWatermarkComposites({
+    width,
+    height,
+    watermarkText: "KocakZ.com/script",
+  });
 
   const composites = [
     {
@@ -249,26 +282,80 @@ export async function processScriptImage(inputBuffer) {
       left: 0,
       top: Math.round((height - cropHeight) / 2),
     },
-    {
-      input: watermarkSvg,
-      left: 0,
-      top: 0,
-    },
+    ...watermarkComposites,
   ];
-
-  if (logoInput) {
-    composites.splice(1, 0, {
-      input: logoInput,
-      left: padding,
-      top: Math.round(height - logoHeight + padding / 2),
-    });
-  }
 
   return applyKocakzMetadata(
     sharp(background)
       .composite(composites)
       .webp({ quality: 90 }),
   ).toBuffer();
+}
+
+/**
+ * Processes executor thumbnails (process: "executor"):
+ * 1. Centers the logo within a 190x190 bounding box on a 480x270 canvas.
+ * 2. Samples top-left pixel for background color matching; if transparent, defaults to dark theme (#0f1219).
+ * 3. Applies vector text watermark ("KocakZ.com/script") using DMSans font.
+ * 4. Adds outlined KocakZ brand logo.
+ * 5. Attaches KocakZ EXIF metadata and encodes to WebP quality 90.
+ *
+ * @param {Buffer} inputBuffer
+ * @returns {Promise<Buffer>}
+ */
+export async function processExecutorThumbnail(inputBuffer) {
+  const width = 480;
+  const height = 270;
+  const logoSize = 190;
+
+  // Resize for sampling the background color.
+  const { data } = await sharp(inputBuffer)
+    .resize(logoSize, logoSize, {
+      fit: "inside",
+      withoutEnlargement: true,
+    })
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+
+  // Sample the top-left pixel. If transparent (alpha < 50), default to sleek KocakZ dark slate (#0f1219).
+  const isTransparent = data[3] < 50;
+  const background = isTransparent
+    ? { r: 15, g: 18, b: 25, alpha: 1 }
+    : { r: data[0], g: data[1], b: data[2], alpha: 1 };
+
+  const logo = await sharp(inputBuffer)
+    .resize(logoSize, logoSize, {
+      fit: "inside",
+      withoutEnlargement: true,
+    })
+    .png()
+    .toBuffer();
+
+  const watermarkComposites = await buildWatermarkComposites({
+    width,
+    height,
+    watermarkText: "KocakZ.com/script",
+  });
+
+  const baseCanvas = sharp({
+    create: {
+      width,
+      height,
+      channels: 4,
+      background,
+    },
+  })
+    .composite([
+      { input: logo, gravity: "centre" },
+      ...watermarkComposites,
+    ])
+    .flatten({
+      background: { r: background.r, g: background.g, b: background.b },
+    })
+    .webp({ quality: 90 });
+
+  return applyKocakzMetadata(baseCanvas).toBuffer();
 }
 
 /**

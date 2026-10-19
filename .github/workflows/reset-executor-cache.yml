@@ -1,0 +1,52 @@
+name: Reset Executor Cache
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Run cache reset without saving back to cache'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: scraper-data
+  cancel-in-progress: false
+
+jobs:
+  reset-executor-cache:
+    name: Reset Executor Thumbnail Cache
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Restore Scraper Cache
+        uses: actions/cache/restore@v4
+        id: restore-cache
+        with:
+          path: .cache
+          key: scraper-cache-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: |
+            scraper-cache-${{ runner.os }}-
+
+      - name: Reset Executor Thumbnail Cache Entries
+        run: node src/utils/reset-executor-cache.js
+
+      - name: Save Updated Scraper Cache
+        if: ${{ !inputs.dry_run }}
+        uses: actions/cache/save@v4
+        with:
+          path: .cache
+          key: scraper-cache-${{ runner.os }}-${{ github.run_id }}

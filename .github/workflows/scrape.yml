@@ -16,6 +16,11 @@ on:
         required: false
         type: boolean
         default: false
+      reset_executor_cache:
+        description: 'Reset executor thumbnail cache only (keeps all scripts & games)'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -51,6 +56,10 @@ jobs:
       - name: Clear CDN cache on demand
         if: ${{ inputs.clear_cdn_cache }}
         run: rm -f .cache/cdn-images.json
+
+      - name: Reset executor thumbnail cache on demand
+        if: ${{ inputs.reset_executor_cache }}
+        run: node src/utils/reset-executor-cache.js
 
       - name: Install dependencies
         run: |

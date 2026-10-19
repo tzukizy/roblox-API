@@ -16,6 +16,7 @@ import {
   resolveScriptThumbnail,
   resolveAvatarThumbnail,
   resolveGameThumbnail,
+  resolveExecutorThumbnail,
   saveCdnCache,
 } from "./utils/cdn.js";
 import { scrapeRolimonsGameList } from "./scrapers/rolimons.js";
@@ -1139,13 +1140,17 @@ export async function runScraper() {
   const executors = await Promise.all(
     rawExecutors.map(async (item) => {
       const copy = { ...item };
-      if (copy.thumbnail) {
-        copy.thumbnail = await resolveScriptThumbnail(copy.thumbnail);
-      }
+      const thumbCandidates = [
+        copy.thumbnail,
+        ...(Array.isArray(copy.logos) ? copy.logos : []),
+        copy.logo,
+      ].filter(Boolean);
+      copy.thumbnail = await resolveExecutorThumbnail(thumbCandidates);
+
       const logoCandidates = [
         copy.logo,
         ...(Array.isArray(copy.logos) ? copy.logos : []),
-        copy.thumbnail?.url || copy.thumbnail,
+        copy.thumbnail?.original || copy.thumbnail?.url || copy.thumbnail,
       ].filter(Boolean);
       copy.logo = await resolveAvatarThumbnail(logoCandidates);
       return copy;
