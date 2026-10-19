@@ -164,7 +164,7 @@ export async function isUrlReachable(url, timeoutMs = 3500) {
  */
 export async function resolveCdnImage(
   rawUrl,
-  { process = false, timeoutMs = 20000 } = {},
+  { process: shouldProcess = false, timeoutMs = 20000 } = {},
 ) {
   if (!rawUrl || typeof rawUrl !== "string") return null;
 
@@ -186,7 +186,7 @@ export async function resolveCdnImage(
     targetUrl = normalizeRobloxThumb(targetUrl);
   }
 
-  const cacheKey = `${process ? "script" : "raw"}::${targetUrl}`;
+  const cacheKey = `${shouldProcess ? "script" : "raw"}::${targetUrl}`;
   if (cdnCache.has(cacheKey)) {
     return cdnCache.get(cacheKey);
   }
@@ -194,13 +194,17 @@ export async function resolveCdnImage(
   const mediaUrl =
     R2_CONFIG.publicUrl || CDN_CONFIG.mediaUrl || "https://media.kocakz.me";
 
-  const hasHashKey = Boolean(R2_CONFIG.hashKey || process.env.HASH_KEY);
+  const envHashKey =
+    typeof process !== "undefined" && process.env?.HASH_KEY
+      ? process.env.HASH_KEY
+      : "";
+  const hasHashKey = Boolean(R2_CONFIG.hashKey || envHashKey);
   let hash = null;
   let filename = null;
   let fullCdnUrl = null;
 
   if (hasHashKey) {
-    hash = urlToHash(targetUrl, process);
+    hash = urlToHash(targetUrl, shouldProcess);
     filename = `${hash}.webp`;
     fullCdnUrl = `${mediaUrl}/${filename}`;
 
@@ -220,7 +224,7 @@ export async function resolveCdnImage(
   if (isR2Configured() && R2_CONFIG.hashKey) {
     try {
       if (!hash) {
-        hash = urlToHash(targetUrl, process);
+        hash = urlToHash(targetUrl, shouldProcess);
         filename = `${hash}.webp`;
         fullCdnUrl = `${mediaUrl}/${filename}`;
       }
@@ -245,7 +249,7 @@ export async function resolveCdnImage(
 
       // Process image buffer matching WebAuthCDN pipeline
       let processedBuffer;
-      if (process) {
+      if (shouldProcess) {
         processedBuffer = await processScriptImage(inputBuffer);
       } else {
         processedBuffer = await processSquareImage(inputBuffer, 160);
@@ -281,7 +285,7 @@ export async function resolveCdnImage(
       },
       body: JSON.stringify({
         url: targetUrl,
-        process: Boolean(process),
+        process: Boolean(shouldProcess),
       }),
       signal: AbortSignal.timeout(timeoutMs),
     });
