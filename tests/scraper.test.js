@@ -734,6 +734,15 @@ test("resolveGameThumbnail uploads reachable URL and returns full CDN URL", asyn
   assert.ok(typeof res.original === "string");
 });
 
+test("resolveGameThumbnail expands relative paths to full URLs", async () => {
+  // Candidate with relative path that 404s falls back to no-game.webp cleanly without crash
+  const res = await resolveGameThumbnail([
+    "/images/sb/rbx-non-existent-99999.png",
+  ]);
+  assert.equal(res.url, "https://media.kocakz.me/no-game.webp");
+  assert.equal(res.original, null);
+});
+
 test("migrateCacheFile converts cdn.kocakz.me/images/ entries to media.kocakz.me/", async () => {
   const { migrateCacheFile } = await import("../src/utils/migrate-cache.js");
   const tempCachePath = path.resolve(ROOT_DIR, ".cache", "test-migrate.json");

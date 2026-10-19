@@ -356,6 +356,11 @@ export async function resolveGameThumbnail(candidateUrls) {
     .map((u) => (typeof u === "object" && u ? u.original || u.url : u))
     .filter((u) => u && typeof u === "string")
     .map((u) => u.trim())
+    .map((u) => {
+      if (u.startsWith("//")) return "https:" + u;
+      if (u.startsWith("/")) return resolveScriptImageUrl(u);
+      return u;
+    })
     .filter((u) => {
       if (!u) return false;
       if (

@@ -5,6 +5,7 @@ import {
   ensureDir,
   writeJsonFile,
   buildUnifiedGame,
+  buildGameThumbnails,
   toSafeFilename,
   slugToHash,
   paginateGames,
@@ -240,10 +241,26 @@ export async function runScraper() {
         resolvedOwner.profilePicture = resolvedProfile;
       }
 
-      // 3. Resolve game image if present (process: false)
-      let resolvedGameImage = base.game?.imageUrl || base.game?.thumbnail || "";
-      if (resolvedGameImage) {
-        resolvedGameImage = await resolveGameThumbnail(resolvedGameImage);
+      // 3. Resolve game image (multi-tier candidate waterfall)
+      let resolvedGameImage;
+      if (finalPlaceId > 0) {
+        const candidateUrls = buildGameThumbnails({
+          robloxThumb: rolimonsPlaceIcons.get(finalPlaceId),
+          rolimonsThumb: rolimonsMap.get(finalPlaceId)?.rolimonsThumb,
+          scriptbloxThumb: base.game?.imageUrl || base.game?.thumbnail,
+          fallback: CDN_CONFIG?.fallbacks?.game,
+        });
+        resolvedGameImage = await resolveGameThumbnail(candidateUrls);
+      } else {
+        const rawGameImg = base.game?.imageUrl || base.game?.thumbnail || "";
+        resolvedGameImage = rawGameImg
+          ? await resolveGameThumbnail(rawGameImg)
+          : {
+              url:
+                CDN_CONFIG?.fallbacks?.game ||
+                "https://media.kocakz.me/no-game.webp",
+              original: null,
+            };
       }
 
       // 4. Resolve supported games images if present
@@ -251,9 +268,19 @@ export async function runScraper() {
       const resolvedSupportedGames = Array.isArray(rawSupported)
         ? await Promise.all(
             rawSupported.map(async (sg) => {
-              const sgImg = sg.imageUrl || sg.thumbnail;
-              if (sgImg) {
-                const thumbObj = await resolveGameThumbnail(sgImg);
+              const sgPlaceId = Number(sg.gameId || sg.placeId || 0);
+              const candidateUrls =
+                sgPlaceId > 0
+                  ? buildGameThumbnails({
+                      robloxThumb: rolimonsPlaceIcons.get(sgPlaceId),
+                      rolimonsThumb: rolimonsMap.get(sgPlaceId)?.rolimonsThumb,
+                      scriptbloxThumb: sg.imageUrl || sg.thumbnail,
+                      fallback: CDN_CONFIG?.fallbacks?.game,
+                    })
+                  : [sg.imageUrl || sg.thumbnail].filter(Boolean);
+
+              if (candidateUrls.length > 0) {
+                const thumbObj = await resolveGameThumbnail(candidateUrls);
                 return {
                   ...sg,
                   imageUrl: thumbObj,
