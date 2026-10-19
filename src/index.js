@@ -749,6 +749,7 @@ export async function runScraper() {
               page: p,
               next: p < totalScriptPages ? p + 1 : null,
               total: totalScriptPages,
+              totalPages: totalScriptPages,
               scripts: pageScripts,
             };
 
@@ -1012,6 +1013,7 @@ export async function runScraper() {
       page: p,
       next: p < totalUniversalPages ? p + 1 : null,
       total: totalUniversalPages,
+      totalPages: totalUniversalPages,
       scripts: pageScripts,
     };
     await writeJsonFile(
